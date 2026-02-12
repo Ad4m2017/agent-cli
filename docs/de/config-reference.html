@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../assets/docs.css" />
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">Agent CLI Docs</div>
@@ -23,7 +24,10 @@
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle dark/light theme">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-light"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-dark" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               <option value="../config-reference.html">🇺🇸 English</option>
 <option value="./config-reference.html" selected>🇩🇪 Deutsch</option>
@@ -32,42 +36,174 @@
         </div>
         <article class="article">
 <h1 id="konfigurationsreferenz">Konfigurationsreferenz</h1>
-<p>Referenz fuer <code>agent.json</code> und <code>agent.auth.json</code>.</p>
-<h2 id="doku-bauen">Doku bauen</h2>
+<p>Vollstaendige Referenz fuer die Konfigurationsdateien <code>agent.json</code> und <code>agent.auth.json</code>.</p>
+<h2 id="ueberblick">Ueberblick</h2>
+<p>agent-cli nutzt zwei lokale JSON-Dateien fuer die Konfiguration:</p>
+<ul><li><code>agent.json</code> -- Nicht-geheime Runtime-Defaults und Sicherheitsrichtlinie. Kann committet werden.</li><li><code>agent.auth.json</code> -- Provider-Credentials und Tokens. Niemals committen.</li></ul>
+<p>Beide Dateien werden automatisch von <code>node agent-connect.js</code> erstellt. Du kannst sie auch manuell bearbeiten.</p>
+<h2 id="doku-neu-bauen">Doku neu bauen</h2>
+<p>Nach Aenderungen an Markdown-Quellen, HTML neu generieren:</p>
 <pre><code class="language-bash">node scripts/build-docs.js</code></pre>
 <h2 id="agentjson">agent.json</h2>
-<p>Nicht-sensitive Runtime- und Sicherheitskonfiguration.</p>
+<p>Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit sinnvollen Defaults vom Setup-Wizard erstellt.</p>
+<h3 id="vollstaendiges-beispiel">Vollstaendiges Beispiel</h3>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;runtime&quot;: {
+    &quot;defaultProvider&quot;: &quot;openai&quot;,
+    &quot;defaultModel&quot;: &quot;openai/gpt-4.1-mini&quot;,
+    &quot;defaultMode&quot;: &quot;build&quot;,
+    &quot;defaultApprovalMode&quot;: &quot;ask&quot;,
+    &quot;defaultToolsMode&quot;: &quot;auto&quot;
+  },
+  &quot;security&quot;: {
+    &quot;mode&quot;: &quot;build&quot;,
+    &quot;denyCritical&quot;: [
+      &quot;rm -rf /&quot;,
+      &quot;mkfs&quot;,
+      &quot;shutdown&quot;,
+      &quot;reboot&quot;,
+      &quot;poweroff&quot;,
+      &quot;dd if=&quot;,
+      &quot;re:curl\\s+.*\\|\\s*(sh|bash)&quot;,
+      &quot;re:wget\\s+.*\\|\\s*(sh|bash)&quot;
+    ],
+    &quot;modes&quot;: {
+      &quot;plan&quot;: {
+        &quot;allow&quot;: [&quot;pwd&quot;, &quot;ls&quot;, &quot;whoami&quot;, &quot;date&quot;, &quot;git status&quot;, &quot;git branch&quot;, &quot;git diff&quot;, &quot;git log&quot;, &quot;node -v&quot;, &quot;npm -v&quot;],
+        &quot;deny&quot;: [&quot;rm&quot;, &quot;sudo&quot;, &quot;chmod&quot;, &quot;chown&quot;, &quot;mv&quot;, &quot;cp&quot;, &quot;docker&quot;, &quot;npm install&quot;, &quot;git push&quot;]
+      },
+      &quot;build&quot;: {
+        &quot;allow&quot;: [&quot;pwd&quot;, &quot;ls&quot;, &quot;whoami&quot;, &quot;date&quot;, &quot;git&quot;, &quot;node&quot;, &quot;npm&quot;, &quot;pnpm&quot;, &quot;yarn&quot;, &quot;bun&quot;, &quot;python&quot;, &quot;pytest&quot;, &quot;go&quot;, &quot;cargo&quot;, &quot;make&quot;, &quot;docker&quot;],
+        &quot;deny&quot;: [&quot;rm&quot;, &quot;sudo&quot;, &quot;shutdown&quot;, &quot;reboot&quot;, &quot;mkfs&quot;, &quot;chown&quot;]
+      },
+      &quot;unsafe&quot;: {
+        &quot;allow&quot;: [&quot;*&quot;],
+        &quot;deny&quot;: [&quot;rm -rf /&quot;, &quot;mkfs&quot;, &quot;shutdown&quot;, &quot;reboot&quot;, &quot;poweroff&quot;]
+      }
+    }
+  }
+}</code></pre>
 <h3 id="runtime">runtime</h3>
-<ul><li><code>defaultProvider</code></li><li><code>defaultModel</code></li><li><code>defaultMode</code> (<code>plan|build|unsafe</code>)</li><li><code>defaultApprovalMode</code> (<code>ask|auto|never</code>)</li><li><code>defaultToolsMode</code> (<code>auto|on|off</code>)</li></ul>
+<ul><li><code>defaultProvider</code> (<code>string</code>) -- Provider-Kennung (z.B. <code>&quot;openai&quot;</code>, <code>&quot;copilot&quot;</code>, <code>&quot;groq&quot;</code>). Wird verwendet wenn <code>--model</code> keinen Provider-Prefix hat.</li><li><code>defaultModel</code> (<code>string</code>) -- Vollstaendige Modell-Kennung im Format <code>provider/model</code> (z.B. <code>&quot;openai/gpt-4.1-mini&quot;</code>). Wird verwendet wenn <code>--model</code> nicht uebergeben wird.</li><li><code>defaultMode</code> (<code>string</code>: <code>&quot;plan&quot;</code>, <code>&quot;build&quot;</code>, <code>&quot;unsafe&quot;</code>) -- Sicherheitsmodus wenn <code>--mode</code> nicht uebergeben wird. Standard: <code>&quot;build&quot;</code>.</li><li><code>defaultApprovalMode</code> (<code>string</code>: <code>&quot;ask&quot;</code>, <code>&quot;auto&quot;</code>, <code>&quot;never&quot;</code>) -- Freigabemodus wenn <code>--approval</code> nicht uebergeben wird. Standard: <code>&quot;ask&quot;</code>.</li><li><code>defaultToolsMode</code> (<code>string</code>: <code>&quot;auto&quot;</code>, <code>&quot;on&quot;</code>, <code>&quot;off&quot;</code>) -- Tools-Modus wenn <code>--tools</code> nicht uebergeben wird. Standard: <code>&quot;auto&quot;</code>.</li><li><code>approvalTimeoutMs</code> (<code>number</code>, optional) -- Timeout in Millisekunden fuer die interaktive Freigabe-Abfrage. 0 oder weggelassen bedeutet kein Timeout.</li></ul>
 <h3 id="security">security</h3>
-<ul><li><code>denyCritical</code></li><li><code>modes.&lt;mode&gt;.allow</code></li><li><code>modes.&lt;mode&gt;.deny</code></li></ul>
-<p>Entscheidungsreihenfolge:</p>
-<ol><li><code>denyCritical</code></li><li><code>deny</code></li><li><code>allow</code></li></ol>
+<ul><li><code>mode</code> (<code>string</code>) -- Aktiver Sicherheitsmodus. Sollte mit <code>runtime.defaultMode</code> uebereinstimmen.</li><li><code>denyCritical</code> (<code>string[]</code>) -- Befehle die immer blockiert werden, unabhaengig vom Modus. Unterstuetzt Klartext-Matching und Regex via <code>re:</code>-Prefix.</li><li><code>modes</code> (<code>object</code>) -- Modusspezifische Allow/Deny-Regelsets.</li></ul>
+<h3 id="securitymodesmode">security.modes.&lt;mode&gt;</h3>
+<ul><li><code>allow</code> (<code>string[]</code>) -- In diesem Modus erlaubte Befehle. <code>&quot;*&quot;</code> fuer alle verwenden.</li><li><code>deny</code> (<code>string[]</code>) -- In diesem Modus blockierte Befehle.</li></ul>
+<h3 id="regel-matching">Regel-Matching</h3>
+<p>Regeln werden gegen den vollstaendigen Befehlsstring gematcht:</p>
+<ul><li><code>&quot;*&quot;</code> -- matcht jeden Befehl</li><li><code>&quot;re:&lt;pattern&gt;&quot;</code> -- Regex-Match (case-insensitive). Beispiel: <code>&quot;re:curl\\s+.*\\|\\s*(sh|bash)&quot;</code></li><li>Klartext -- exakter Match oder Prefix-Match. <code>&quot;git&quot;</code> matcht <code>&quot;git status&quot;</code>, <code>&quot;git push&quot;</code>, etc.</li></ul>
+<h3 id="entscheidungsreihenfolge">Entscheidungsreihenfolge</h3>
+<ol><li><code>denyCritical</code> -- wird zuerst geprueft, gewinnt immer</li><li><code>modes[mode].deny</code> -- wird als zweites geprueft</li><li><code>modes[mode].allow</code> -- wird zuletzt geprueft, Befehl muss mindestens eine Allow-Regel matchen</li></ol>
+<p>Wenn ein Befehl <code>denyCritical</code> oder <code>deny</code> matcht, wird er blockiert. Wenn er keine <code>allow</code>-Regel matcht, wird er ebenfalls blockiert.</p>
 <h2 id="agentauthjson">agent.auth.json</h2>
-<p>Secrets, Tokens und Provider-Transportdaten.</p>
-<h3 id="openai-kompatibel">OpenAI-kompatibel</h3>
-<ul><li><code>kind: openai_compatible</code></li><li><code>baseUrl</code></li><li><code>apiKey</code></li></ul>
-<h3 id="github-copilot">GitHub Copilot</h3>
-<ul><li><code>kind: github_copilot</code></li><li>OAuth- und Runtime-Tokens</li></ul>
-<h2 id="error-codes">Error-Codes</h2>
-<h3 id="agentjs">agent.js</h3>
-<ul><li><code>ATTACHMENT_NOT_FOUND</code></li><li><code>ATTACHMENT_UNREADABLE</code></li><li><code>ATTACHMENT_TOO_LARGE</code></li><li><code>ATTACHMENT_TOO_MANY_FILES</code></li><li><code>ATTACHMENT_TOO_MANY_IMAGES</code></li><li><code>ATTACHMENT_TYPE_UNSUPPORTED</code></li><li><code>VISION_NOT_SUPPORTED</code></li><li><code>PROVIDER_NOT_CONFIGURED</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code></li><li><code>TOOLS_NOT_SUPPORTED</code></li></ul>
-<h3 id="agent-connectjs">agent-connect.js</h3>
-<ul><li><code>PROVIDER_INVALID</code></li><li><code>API_KEY_REQUIRED</code></li><li><code>COPILOT_DEVICE_START_FAILED</code></li><li><code>COPILOT_DEVICE_FLOW_FAILED</code></li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code></li><li><code>COPILOT_RUNTIME_TOKEN_FAILED</code></li></ul>
+<p>Diese Datei speichert Provider-Credentials. Dateiberechtigungen werden auf <code>0600</code> gesetzt (nur Eigentuemer lesen/schreiben). Diese Datei niemals committen.</p>
+<h3 id="openai-kompatibles-provider-beispiel">OpenAI-kompatibles Provider-Beispiel</h3>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;defaultProvider&quot;: &quot;openai&quot;,
+  &quot;defaultModel&quot;: &quot;openai/gpt-4.1-mini&quot;,
+  &quot;providers&quot;: {
+    &quot;openai&quot;: {
+      &quot;kind&quot;: &quot;openai_compatible&quot;,
+      &quot;baseUrl&quot;: &quot;https://api.openai.com/v1&quot;,
+      &quot;apiKey&quot;: &quot;sk-...&quot;
+    }
+  }
+}</code></pre>
+<p>Felder:</p>
+<ul><li><code>kind</code> (<code>string</code>) -- Immer <code>&quot;openai_compatible&quot;</code> fuer API-Key-Provider.</li><li><code>baseUrl</code> (<code>string</code>) -- Provider API Base-URL.</li><li><code>apiKey</code> (<code>string</code>) -- Dein API-Key.</li></ul>
+<h3 id="github-copilot-provider-beispiel">GitHub Copilot Provider-Beispiel</h3>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;defaultProvider&quot;: &quot;copilot&quot;,
+  &quot;defaultModel&quot;: &quot;copilot/gpt-4o&quot;,
+  &quot;providers&quot;: {
+    &quot;copilot&quot;: {
+      &quot;kind&quot;: &quot;github_copilot&quot;,
+      &quot;githubToken&quot;: &quot;gho_...&quot;,
+      &quot;githubRefreshToken&quot;: &quot;ghr_...&quot;,
+      &quot;githubTokenExpiresAt&quot;: &quot;2025-01-15T12:00:00.000Z&quot;,
+      &quot;copilotToken&quot;: &quot;tid=...&quot;,
+      &quot;copilotTokenExpiresAt&quot;: &quot;2025-01-15T12:30:00.000Z&quot;,
+      &quot;oauth&quot;: {
+        &quot;clientId&quot;: &quot;Iv1.b507a08c87ecfe98&quot;,
+        &quot;accessTokenUrl&quot;: &quot;https://github.com/login/oauth/access_token&quot;
+      },
+      &quot;api&quot;: {
+        &quot;copilotTokenUrl&quot;: &quot;https://api.github.com/copilot_internal/v2/token&quot;,
+        &quot;baseUrl&quot;: &quot;https://api.githubcopilot.com&quot;
+      },
+      &quot;extraHeaders&quot;: {
+        &quot;Editor-Version&quot;: &quot;vscode/1.85.1&quot;,
+        &quot;Editor-Plugin-Version&quot;: &quot;copilot-chat/0.12.0&quot;,
+        &quot;User-Agent&quot;: &quot;agent.js-copilot&quot;
+      }
+    }
+  }
+}</code></pre>
+<p>Felder:</p>
+<ul><li><code>kind</code> (<code>string</code>) -- Immer <code>&quot;github_copilot&quot;</code>.</li><li><code>githubToken</code> (<code>string</code>) -- GitHub OAuth Access Token.</li><li><code>githubRefreshToken</code> (<code>string</code>) -- GitHub OAuth Refresh Token.</li><li><code>githubTokenExpiresAt</code> (<code>string</code>) -- ISO-Zeitstempel des GitHub-Token-Ablaufs.</li><li><code>copilotToken</code> (<code>string</code>) -- Kurzlebiger Copilot Runtime-Token.</li><li><code>copilotTokenExpiresAt</code> (<code>string</code>) -- ISO-Zeitstempel des Copilot-Token-Ablaufs.</li><li><code>oauth</code> (<code>object</code>) -- OAuth-Endpoint-Konfiguration.</li><li><code>api</code> (<code>object</code>) -- Copilot API-Endpoint-Konfiguration.</li><li><code>extraHeaders</code> (<code>object</code>) -- Zusaetzliche Header fuer Copilot API-Anfragen.</li></ul>
+<h3 id="mehrere-provider">Mehrere Provider</h3>
+<p>Du kannst mehrere Provider gleichzeitig konfigurieren:</p>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;defaultProvider&quot;: &quot;openai&quot;,
+  &quot;defaultModel&quot;: &quot;openai/gpt-4.1-mini&quot;,
+  &quot;providers&quot;: {
+    &quot;openai&quot;: {
+      &quot;kind&quot;: &quot;openai_compatible&quot;,
+      &quot;baseUrl&quot;: &quot;https://api.openai.com/v1&quot;,
+      &quot;apiKey&quot;: &quot;sk-...&quot;
+    },
+    &quot;groq&quot;: {
+      &quot;kind&quot;: &quot;openai_compatible&quot;,
+      &quot;baseUrl&quot;: &quot;https://api.groq.com/openai/v1&quot;,
+      &quot;apiKey&quot;: &quot;gsk_...&quot;
+    },
+    &quot;copilot&quot;: {
+      &quot;kind&quot;: &quot;github_copilot&quot;,
+      &quot;githubToken&quot;: &quot;gho_...&quot;
+    }
+  }
+}</code></pre>
+<p>Zwischen Providern wechseln mit <code>--model provider/model</code>:</p>
+<pre><code class="language-bash">node agent.js -m &quot;Hallo&quot; --model groq/llama-3.3-70b-versatile
+node agent.js -m &quot;Hallo&quot; --model openai/gpt-4.1</code></pre>
+<h3 id="token-refresh">Token-Refresh</h3>
+<p>Copilot-Tokens sind kurzlebig (ca. 25 Minuten). Der Agent erneuert sie automatisch:</p>
+<ol><li>Prueft ob der Copilot-Token noch gueltig ist (mit 60-Sekunden-Puffer)</li><li>Falls abgelaufen, holt einen neuen Copilot-Token mit dem GitHub Access Token</li><li>Falls der GitHub-Token ebenfalls abgelaufen ist (HTTP 401), erneuert ihn mit dem Refresh Token</li><li>Speichert aktualisierte Tokens in <code>agent.auth.json</code></li></ol>
+<p>Wenn alle Tokens abgelaufen sind und der Refresh fehlschlaegt: <code>node agent-connect.js --provider copilot</code> erneut ausfuehren.</p>
+<h2 id="error-code-referenz">Error-Code-Referenz</h2>
+<h3 id="agentjs-fehler">agent.js Fehler</h3>
+<ul><li><code>ATTACHMENT_NOT_FOUND</code> -- Dateipfad existiert nicht</li><li><code>ATTACHMENT_UNREADABLE</code> -- Datei nicht als UTF-8-Text lesbar</li><li><code>ATTACHMENT_TOO_LARGE</code> -- Datei ueberschreitet 200KB oder Bild ueberschreitet 5MB</li><li><code>ATTACHMENT_TOO_MANY_FILES</code> -- Mehr als 10 Dateien angehaengt</li><li><code>ATTACHMENT_TOO_MANY_IMAGES</code> -- Mehr als 5 Bilder angehaengt</li><li><code>ATTACHMENT_TYPE_UNSUPPORTED</code> -- Bildformat nicht in: .png, .jpg, .jpeg, .webp</li><li><code>VISION_NOT_SUPPORTED</code> -- Bild an Text-only-Modell angehaengt</li><li><code>PROVIDER_NOT_CONFIGURED</code> -- Provider nicht in agent.auth.json gefunden</li><li><code>INTERACTIVE_APPROVAL_JSON</code> -- <code>--approval ask</code> mit <code>--json</code> nicht moeglich</li><li><code>INTERACTIVE_APPROVAL_TTY</code> -- <code>--approval ask</code> ohne TTY nicht moeglich</li><li><code>TOOLS_NOT_SUPPORTED</code> -- Modell unterstuetzt kein Tool-Calling (mit <code>--tools on</code>)</li><li><code>AGENT_CONFIG_INVALID</code> -- agent.json ist kein gueltiges JSON</li><li><code>AUTH_CONFIG_INVALID</code> -- agent.auth.json ist kein gueltiges JSON</li><li><code>AGENT_CONFIG_ERROR</code> -- agent.json konnte nicht gelesen werden</li><li><code>AUTH_CONFIG_ERROR</code> -- agent.auth.json konnte nicht gelesen werden</li><li><code>RUNTIME_ERROR</code> -- Unbehandelter Laufzeitfehler</li></ul>
+<h3 id="agent-connectjs-fehler">agent-connect.js Fehler</h3>
+<ul><li><code>PROVIDER_INVALID</code> -- Unbekannter Provider-Name</li><li><code>API_KEY_REQUIRED</code> -- Leerer API-Key beim Setup</li><li><code>AUTH_CONFIG_INVALID</code> -- agent.auth.json ist kein gueltiges JSON</li><li><code>AGENT_CONFIG_INVALID</code> -- agent.json ist kein gueltiges JSON</li><li><code>COPILOT_DEVICE_START_FAILED</code> -- GitHub Device Flow konnte nicht gestartet werden</li><li><code>COPILOT_DEVICE_FLOW_FAILED</code> -- Device Flow Authentifizierung fehlgeschlagen</li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code> -- Device Code abgelaufen bevor Benutzer bestaetigt hat</li><li><code>COPILOT_RUNTIME_TOKEN_FAILED</code> -- GitHub-Token konnte nicht gegen Copilot-Token getauscht werden</li><li><code>COPILOT_RUNTIME_TOKEN_MISSING</code> -- Copilot-Token-Antwort war leer</li><li><code>COPILOT_TOKEN_MISSING</code> -- Kein Access Token in Device-Flow-Antwort</li><li><code>PROVIDER_UNSUPPORTED</code> -- Provider-Typ nicht unterstuetzt</li><li><code>SELECT_OPTIONS_EMPTY</code> -- Wizard-Menue hat keine Optionen</li><li><code>INTERRUPTED</code> -- Benutzer hat Ctrl+C waehrend des Wizards gedrueckt</li><li><code>CONNECT_ERROR</code> -- Unbehandelter Fehler waehrend des Setups</li></ul>
+<h2 id="cli-prioritaet">CLI-Prioritaet</h2>
+<p>Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):</p>
+<ol><li>CLI-Flags (<code>--model</code>, <code>--mode</code>, <code>--approval</code>, <code>--tools</code>, <code>--unsafe</code>)</li><li><code>agent.json</code> Runtime-Defaults</li><li><code>agent.auth.json</code> Defaults (<code>defaultProvider</code>, <code>defaultModel</code>)</li><li>Hardcodierte Fallbacks (<code>gpt-4.1-mini</code>, <code>build</code>, <code>ask</code>, <code>auto</code>)</li></ol>
         </article>
       </main>
       <aside class="right">
         <div class="toc-title">On This Page</div>
-        <nav class="toc"><a href="#doku-bauen">Doku bauen</a>
+        <nav class="toc"><a href="#ueberblick">Ueberblick</a>
+<a href="#doku-neu-bauen">Doku neu bauen</a>
 <a href="#agentjson">agent.json</a>
-<a style="padding-left:12px" href="#runtime">runtime</a>
-<a style="padding-left:12px" href="#security">security</a>
+<a class="sub-item" href="#vollstaendiges-beispiel">Vollstaendiges Beispiel</a>
+<a class="sub-item" href="#runtime">runtime</a>
+<a class="sub-item" href="#security">security</a>
+<a class="sub-item" href="#securitymodesmode">security.modes.&lt;mode&gt;</a>
+<a class="sub-item" href="#regel-matching">Regel-Matching</a>
+<a class="sub-item" href="#entscheidungsreihenfolge">Entscheidungsreihenfolge</a>
 <a href="#agentauthjson">agent.auth.json</a>
-<a style="padding-left:12px" href="#openai-kompatibel">OpenAI-kompatibel</a>
-<a style="padding-left:12px" href="#github-copilot">GitHub Copilot</a>
-<a href="#error-codes">Error-Codes</a>
-<a style="padding-left:12px" href="#agentjs">agent.js</a>
-<a style="padding-left:12px" href="#agent-connectjs">agent-connect.js</a></nav>
+<a class="sub-item" href="#openai-kompatibles-provider-beispiel">OpenAI-kompatibles Provider-Beispiel</a>
+<a class="sub-item" href="#github-copilot-provider-beispiel">GitHub Copilot Provider-Beispiel</a>
+<a class="sub-item" href="#mehrere-provider">Mehrere Provider</a>
+<a class="sub-item" href="#token-refresh">Token-Refresh</a>
+<a href="#error-code-referenz">Error-Code-Referenz</a>
+<a class="sub-item" href="#agentjs-fehler">agent.js Fehler</a>
+<a class="sub-item" href="#agent-connectjs-fehler">agent-connect.js Fehler</a>
+<a href="#cli-prioritaet">CLI-Prioritaet</a></nav>
       </aside>
     </div>
     <script src="../assets/docs.js"></script>

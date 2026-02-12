@@ -1,88 +1,262 @@
-# Agent CLI Doku
+# Agent CLI Dokumentation
 
-Minimale, professionelle lokale Agent-CLI mit Provider-Setup, Security-Policy, Freigabe-Mechanismus und JSON-Automation.
+Ein Zero-Dependency, Multi-Provider KI-Agent fuer das Terminal. Keine Frameworks, keine Server, keine Datenbanken -- nur Node.js und dein bevorzugter KI-Anbieter.
 
-## Ueberblick
+## Warum agent-cli?
 
-- `agent.js` fuehrt Prompts und Tool-Calls aus.
-- `agent-connect.js` konfiguriert Provider und Defaults.
-- `agent.json` speichert Runtime-Defaults und Sicherheitsregeln.
-- `agent.auth.json` speichert Provider-Credentials und Tokens.
+- **Zero Dependencies** -- kein `node_modules`, kein Supply-Chain-Risiko
+- **11 Provider** -- Anbieter wechseln mit einer Config-Aenderung
+- **Security-first** -- konfigurierbare Befehlsrichtlinien verhindern destruktive Operationen
+- **Laeuft ueberall** -- SSH, Container, CI, Remote-Server
+- **Lokale Config** -- Credentials bleiben auf deinem Rechner
 
-## Einrichtung
+## Wie es funktioniert
 
-Wizard starten:
+agent-cli sendet deinen Prompt an ein KI-Modell ueber die OpenAI-kompatible Chat-Completions-API. Das Modell kann mit reinem Text antworten oder Tool-Calls anfordern. Aktuell unterstuetzt der Agent ein Tool: `run_command`, das Shell-Befehle ausfuehrt.
+
+Die Ausfuehrung folgt einer agentischen Schleife:
+
+1. Du sendest einen Prompt
+2. Das KI-Modell verarbeitet den Prompt
+3. Wenn das Modell einen Befehl ausfuehren muss, loest es einen `run_command` Tool-Call aus
+4. Der Agent prueft den Befehl gegen die Sicherheitsrichtlinien
+5. Falls erlaubt, fuehrt der Agent den Befehl aus und sendet die Ausgabe zurueck
+6. Das Modell verarbeitet die Ausgabe und loest weitere Tool-Calls aus oder antwortet mit Text
+7. Die Schleife laeuft fuer bis zu 5 Runden
+
+Das bedeutet: Die KI kann Dateien inspizieren, Tests ausfuehren, Git-History pruefen und ueber Ergebnisse nachdenken -- alles innerhalb eines einzigen Prompts.
+
+## Voraussetzungen
+
+- Node.js 18+ (20+ empfohlen)
+- Internetzugang fuer Provider-APIs
+- Kein `npm install` erforderlich
+
+## Installation
+
+```bash
+git clone https://github.com/Ad4m2017/agent-cli.git
+cd agent-cli
+```
+
+Kein Build-Schritt. Keine Paketinstallation.
+
+## Provider konfigurieren
+
+Starte den interaktiven Setup-Wizard:
 
 ```bash
 node agent-connect.js
 ```
 
-Direkt mit Provider:
+Im TTY-Terminal: Pfeiltasten und Enter zur Navigation. Der Wizard schreibt:
+
+- Runtime-Defaults und Sicherheitsrichtlinie in `agent.json`
+- Provider-Credentials in `agent.auth.json` (Klartext, Dateiberechtigungen auf 0600 gesetzt)
+
+### Direktes Provider-Setup
 
 ```bash
 node agent-connect.js --provider openai
-node agent-connect.js --provider moonshot
-node agent-connect.js --provider deepseek
 node agent-connect.js --provider copilot
+node agent-connect.js --provider groq
+node agent-connect.js --provider deepseek
+node agent-connect.js --provider mistral
+node agent-connect.js --provider openrouter
+node agent-connect.js --provider perplexity
+node agent-connect.js --provider together
+node agent-connect.js --provider fireworks
+node agent-connect.js --provider moonshot
+node agent-connect.js --provider xai
 ```
 
-Im interaktiven Terminal: Auswahl mit Up/Down + Enter.
+### Copilot-Setup
 
-## Erste Nutzung
+GitHub Copilot nutzt den OAuth Device Flow. Der Wizard wird:
+
+1. Einen Device-Code generieren
+2. Dich auffordern, eine URL im Browser zu oeffnen
+3. Den Code auf GitHub einzugeben
+4. Automatisch Tokens austauschen, sobald bestaetigt
+
+Copilot-Tokens sind kurzlebig. Der Agent erneuert sie automatisch vor Ablauf.
+
+## Erster Start
 
 ```bash
-node agent.js -m "Hallo"
+node agent.js -m "Welche Dateien sind in diesem Verzeichnis?"
 ```
 
-Mit festem Modell:
+Bestimmten Provider und Modell erzwingen:
 
 ```bash
 node agent.js -m "Analysiere dieses Projekt" --model copilot/gpt-4o
+node agent.js -m "Erklaere diesen Fehler" --model groq/llama-3.3-70b-versatile
 ```
 
-## Wichtige Modi
+## Konzepte
 
-### Approval
+### Tool-Calling
 
-- `ask`: vor jedem Kommando fragen
-- `auto`: erlaubte Kommandos direkt ausfuehren
-- `never`: Kommandos blockieren
+Der Agent stellt dem KI-Modell eine `run_command`-Tool-Definition bereit. Wenn das Modell entscheidet, dass ein Shell-Befehl bei der Beantwortung hilft, gibt es einen Tool-Call zurueck statt Text. Der Agent fuehrt den Befehl mit `execFile` aus (nicht `exec` -- das verhindert Shell-Injection), sendet die Ausgabe zurueck, und das Modell verarbeitet das Ergebnis.
 
-### Tools
+Das erzeugt eine agentische Schleife, in der die KI:
 
-- `auto`: mit Tools starten, bei Inkompatibilitaet ohne Tools wiederholen
-- `on`: Tool-Calling immer aktiv
-- `off`: Tool-Calling deaktiviert
+- Dateien auflisten und lesen kann
+- Tests und Linter ausfuehren kann
+- Git-Status und History pruefen kann
+- Build-Befehle ausfuehren kann
+- Laufende Prozesse inspizieren kann
 
-Beispiele:
+Die Schleife laeuft fuer bis zu 5 Runden, bevor der Agent eine finale Textantwort erzwingt.
+
+### Sicherheitsmodi
+
+Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine dreischichtige Sicherheitsrichtlinie in `agent.json` geprueft:
+
+**Schicht 1: denyCritical** -- blockiert immer katastrophale Befehle, unabhaengig vom Modus:
+
+- `rm -rf /`
+- `mkfs`
+- `shutdown`, `reboot`, `poweroff`
+- `dd if=`
+- Pipen von curl/wget in sh/bash
+
+**Schicht 2: Modusspezifische Deny-Regeln** -- blockiert Befehle basierend auf dem aktuellen Modus.
+
+**Schicht 3: Modusspezifische Allow-Regeln** -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.
+
+Auswertungsreihenfolge: denyCritical -> deny -> allow. Ein Befehl muss alle drei Schichten bestehen.
+
+Die drei Modi:
+
+- **plan** -- Nur-Lesen-Erkundung. Nur `ls`, `pwd`, `git status`, `git log`, `node -v`, `npm -v` erlaubt. Destruktive Befehle, Paketinstallationen und Pushes sind blockiert.
+- **build** (Standard) -- Normale Entwicklung. Git, Node.js, npm, Python, Docker, Make sind erlaubt. `rm`, `sudo` und System-Level-Befehle sind blockiert.
+- **unsafe** -- Breiter Umfang. Alle Befehle erlaubt ausser `denyCritical`-Eintraege. Mit Vorsicht verwenden.
+
+### Freigabemodi (Approval)
+
+Steuert das Human-in-the-Loop-Verhalten fuer die Befehlsausfuehrung:
+
+- **ask** (Standard) -- Der Agent fragt vor jedem Befehl: `Approve? [y/N]`. Erfordert ein TTY-Terminal. Das ist der sicherste Modus fuer interaktive Nutzung.
+- **auto** -- Fuehrt richtlinienkonforme Befehle sofort ohne Nachfrage aus. Erforderlich fuer CI/CD und Scripting. Mit `--json` fuer Automation verwenden.
+- **never** -- Blockiert jede Befehlsausfuehrung. Die KI kann nur mit Text antworten, nie Befehle ausfuehren.
+
+### Tools-Modi
+
+Steuert, ob Tool-Calling-Payloads in API-Anfragen enthalten sind:
+
+- **auto** (Standard) -- Sendet Tool-Definitionen an das Modell. Wenn das Modell sie ablehnt (z.B. Perplexity-Modelle), automatischer Retry ohne Tools.
+- **on** -- Sendet immer Tool-Definitionen. Gibt `TOOLS_NOT_SUPPORTED`-Fehler zurueck wenn das Modell sie nicht verarbeiten kann.
+- **off** -- Sendet nie Tool-Definitionen. Die KI antwortet nur mit Text.
+
+`--no-tools` als Abkuerzung fuer `--tools off` verwenden.
+
+### Provider
+
+Alle Provider ausser Copilot nutzen den Standard-OpenAI-kompatiblen `/chat/completions`-Endpoint. Das bedeutet: jeder OpenAI-kompatible Dienst funktioniert.
+
+- **openai** -- gpt-4.1-mini, gpt-4.1, gpt-4o, gpt-4o-mini, gpt-5-mini
+- **copilot** -- GitHub Copilot via OAuth Device Flow
+- **deepseek** -- deepseek-chat, deepseek-reasoner, deepseek-v3
+- **groq** -- llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768
+- **mistral** -- mistral-small-latest, mistral-medium-latest, mistral-large-latest
+- **openrouter** -- Jedes auf OpenRouter verfuegbare Modell
+- **perplexity** -- sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro
+- **together** -- Llama-3.1-70B-Instruct-Turbo, Qwen2.5-72B-Instruct-Turbo
+- **fireworks** -- llama-v3p1-8b-instruct, qwen2p5-72b-instruct
+- **moonshot** -- moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k
+- **xai** -- grok-2-latest, grok-2-mini-latest, grok-beta
+
+### Datei- und Bild-Anhaenge
+
+Dateien und Bilder als Kontext fuer die KI anhaengen:
 
 ```bash
-node agent.js -m "wie gehts dir?" --model perplexity/sonar --no-tools
-node agent.js -m "repo check" --approval ask --mode build
-```
-
-### Dateien und Bilder anhaengen
-
-```bash
-node agent.js -m "Erklaere diese Datei" --file src/app.ts
+node agent.js -m "Pruefe diese Datei" --file src/app.ts
 node agent.js -m "Beschreibe dieses UI" --model openai/gpt-4o --image screenshot.png
+node agent.js -m "Vergleiche diese" --file a.js --file b.js
 ```
 
 Limits:
 
-- Dateien: max 10, max 200KB je Datei
-- Bilder: max 5, max 5MB je Bild (`.png`, `.jpg`, `.jpeg`, `.webp`)
-- Bild + text-only Modell => `VISION_NOT_SUPPORTED`
+- Dateien: max 10, max 200KB je Datei, muss UTF-8-Text sein
+- Bilder: max 5, max 5MB je Bild, Formate: `.png`, `.jpg`, `.jpeg`, `.webp`
+- Bilder erfordern ein Vision-faehiges Modell (gpt-4o, gpt-4.1, gpt-5, Gemini). Text-only-Modelle geben `VISION_NOT_SUPPORTED` zurueck.
 
-## CLI Referenz
+## Anwendungsbeispiele
+
+### Codebase erkunden
+
+```bash
+node agent.js -m "Was macht dieses Projekt? Fasse die Architektur zusammen."
+```
+
+### Tests ausfuehren und Fehler analysieren
+
+```bash
+node agent.js -m "Fuehre npm test aus und erklaere eventuelle Fehler" --approval auto --mode build
+```
+
+### Bestimmte Datei reviewen
+
+```bash
+node agent.js -m "Pruefe diese Datei auf Bugs" --file src/utils.js --no-tools
+```
+
+### Verschiedene Provider fuer verschiedene Aufgaben
+
+```bash
+# Schnelles Reasoning
+node agent.js -m "Erklaere diesen Fehler" --model groq/llama-3.3-70b-versatile --no-tools
+
+# Suche-basierte Antworten
+node agent.js -m "Neueste Node.js Security-Patches?" --model perplexity/sonar --no-tools
+
+# Voller Agent-Modus
+node agent.js -m "Behebe den fehlschlagenden Test" --model openai/gpt-4.1 --approval auto
+```
+
+### JSON-Ausgabe fuer Scripting
+
+```bash
+node agent.js -m "Tests ausfuehren" --json --approval auto --mode build
+```
+
+## CLI-Referenz
 
 ```text
-node agent.js -m "message" [options]
-node agent-connect.js [--provider copilot|deepseek|fireworks|groq|mistral|moonshot|openai|openrouter|perplexity|together|xai]
+node agent.js -m "nachricht" [optionen]
+
+Optionen:
+  -m, --message <text>   Prompt ans Modell (erforderlich)
+  --model <provider/model|model>
+  --json
+  --mode <plan|build|unsafe>
+  --approval <ask|auto|never>
+  --tools <auto|on|off>
+  --no-tools
+  --file <pfad>          (wiederholbar)
+  --image <pfad>         (wiederholbar)
+  --yes                  Alias fuer --approval auto
+  --unsafe               Unsafe-Modus erzwingen
+  --log                  Fehler-Logging aktivieren
+  --log-file <pfad>      Standard: ./agent.js.log
+  --help
+  --version
+```
+
+```text
+node agent-connect.js [--provider <name>] [--help] [--version]
 ```
 
 ## Fehlerbehebung
 
 - `PROVIDER_NOT_CONFIGURED`: `node agent-connect.js --provider <name>` ausfuehren
-- `INTERACTIVE_APPROVAL_JSON`: bei `--json` nur `--approval auto|never` nutzen
-- `INTERACTIVE_APPROVAL_TTY`: interaktives Terminal nutzen oder `--approval auto`
+- `INTERACTIVE_APPROVAL_JSON`: `--approval auto` oder `--approval never` mit `--json` verwenden
+- `INTERACTIVE_APPROVAL_TTY`: Interaktives Terminal nutzen oder `--approval auto` verwenden
+- `VISION_NOT_SUPPORTED`: Vision-Modell (gpt-4o, gpt-4.1) verwenden oder `--image` entfernen
+- `TOOLS_NOT_SUPPORTED`: `--tools auto` oder `--no-tools` verwenden
+- `COPILOT_DEVICE_CODE_EXPIRED`: `node agent-connect.js --provider copilot` erneut ausfuehren
+- `ATTACHMENT_TOO_LARGE`: Datei ueberschreitet 200KB oder Bild ueberschreitet 5MB
+- `AUTH_CONFIG_INVALID`: `agent.auth.json` loeschen und `node agent-connect.js` erneut ausfuehren

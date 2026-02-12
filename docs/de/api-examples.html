@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="../assets/docs.css" />
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">Agent CLI Docs</div>
@@ -23,7 +24,10 @@
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle dark/light theme">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-light"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-dark" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               <option value="../api-examples.html">🇺🇸 English</option>
 <option value="./api-examples.html" selected>🇩🇪 Deutsch</option>
@@ -32,35 +36,216 @@
         </div>
         <article class="article">
 <h1 id="skript--und-ci-beispiele">Skript- und CI-Beispiele</h1>
-<p>Diese Beispiele helfen bei stabiler JSON-Automation.</p>
+<p>Diese Beispiele zeigen, wie du agent-cli in Automations-Workflows, CI-Pipelines und Skripte integrieren kannst.</p>
 <h2 id="regeln-fuer-automation">Regeln fuer Automation</h2>
-<ul><li>Immer <code>--json</code> verwenden</li><li><code>--approval auto</code> oder <code>--approval never</code> nutzen</li><li><code>--approval ask</code> in Automation vermeiden</li></ul>
+<ul><li>Immer <code>--json</code> fuer parsebaren Output verwenden</li><li><code>--approval auto</code> oder <code>--approval never</code> verwenden (nie <code>--approval ask</code>)</li><li>Das <code>ok</code>-Feld im JSON-Output fuer Erfolg/Fehler pruefen</li><li>Das <code>code</code>-Feld fuer spezifische Fehlerbehandlung pruefen</li></ul>
 <h2 id="bash">Bash</h2>
+<h3 id="grundlegende-nutzung">Grundlegende Nutzung</h3>
 <pre><code class="language-bash">set -euo pipefail
 
-OUT=$(node agent.js -m &quot;Run tests and summarize&quot; --json --approval auto --mode build)
+OUT=$(node agent.js -m &quot;Tests ausfuehren und zusammenfassen&quot; --json --approval auto --mode build)
 echo &quot;$OUT&quot;</code></pre>
+<h3 id="json-antwort-parsen">JSON-Antwort parsen</h3>
+<pre><code class="language-bash">set -euo pipefail
+
+OUT=$(node agent.js -m &quot;npm test ausfuehren&quot; --json --approval auto --mode build)
+OK=$(echo &quot;$OUT&quot; | jq -r &#39;.ok&#39;)
+MESSAGE=$(echo &quot;$OUT&quot; | jq -r &#39;.message&#39;)
+
+if [ &quot;$OK&quot; = &quot;true&quot; ]; then
+  echo &quot;Agent erfolgreich: $MESSAGE&quot;
+else
+  ERROR=$(echo &quot;$OUT&quot; | jq -r &#39;.error&#39;)
+  echo &quot;Agent fehlgeschlagen: $ERROR&quot;
+  exit 1
+fi</code></pre>
+<h3 id="dateien-fuer-review-anhaengen">Dateien fuer Review anhaengen</h3>
+<pre><code class="language-bash">OUT=$(node agent.js \
+  -m &quot;Pruefe diese Datei auf Sicherheitsprobleme&quot; \
+  --file src/auth.js \
+  --json \
+  --approval auto \
+  --tools off)
+echo &quot;$OUT&quot; | jq -r &#39;.message&#39;</code></pre>
+<h3 id="multi-datei-kontext">Multi-Datei-Kontext</h3>
+<pre><code class="language-bash">OUT=$(node agent.js \
+  -m &quot;Vergleiche diese Implementierungen und schlage Verbesserungen vor&quot; \
+  --file src/old-handler.js \
+  --file src/new-handler.js \
+  --json \
+  --approval never)
+echo &quot;$OUT&quot; | jq -r &#39;.message&#39;</code></pre>
+<h3 id="ci-pipeline-check">CI-Pipeline Check</h3>
+<pre><code class="language-bash">set -euo pipefail
+
+RESULT=$(node agent.js \
+  -m &quot;Lint und Tests ausfuehren. Pass oder Fail melden.&quot; \
+  --json \
+  --approval auto \
+  --mode build)
+
+OK=$(echo &quot;$RESULT&quot; | jq -r &#39;.ok&#39;)
+TOOLS_USED=$(echo &quot;$RESULT&quot; | jq &#39;.toolCalls | length&#39;)
+TIMING=$(echo &quot;$RESULT&quot; | jq -r &#39;.timingMs&#39;)
+
+echo &quot;Status: ok=$OK, tools=$TOOLS_USED, zeit=${TIMING}ms&quot;
+
+if [ &quot;$OK&quot; != &quot;true&quot; ]; then
+  echo &quot;$RESULT&quot; | jq -r &#39;.error // .message&#39;
+  exit 1
+fi</code></pre>
 <h2 id="powershell">PowerShell</h2>
-<pre><code class="language-powershell">$out = node agent.js -m &quot;Run tests and summarize&quot; --json --approval auto --mode build
+<h3 id="grundlegende-nutzung">Grundlegende Nutzung</h3>
+<pre><code class="language-powershell">$out = node agent.js -m &quot;Tests ausfuehren und zusammenfassen&quot; --json --approval auto --mode build
 $obj = $out | ConvertFrom-Json
-$obj.message</code></pre>
-<h2 id="json-fehlerbeispiel">JSON Fehlerbeispiel</h2>
+
+if ($obj.ok) {
+    Write-Host &quot;Erfolg: $($obj.message)&quot;
+} else {
+    Write-Error &quot;Fehlgeschlagen: $($obj.error)&quot;
+    exit 1
+}</code></pre>
+<h3 id="mit-datei-anhang">Mit Datei-Anhang</h3>
+<pre><code class="language-powershell">$out = node agent.js -m &quot;Pruefe diese Config&quot; --file config/app.json --json --approval auto --tools off
+$obj = $out | ConvertFrom-Json
+Write-Host $obj.message</code></pre>
+<h2 id="nodejs-child-process">Node.js Child Process</h2>
+<h3 id="synchron">Synchron</h3>
+<pre><code class="language-js">const { execFileSync } = require(&quot;node:child_process&quot;);
+
+const raw = execFileSync(&quot;node&quot;, [
+  &quot;agent.js&quot;,
+  &quot;-m&quot;, &quot;Lint ausfuehren und zusammenfassen&quot;,
+  &quot;--json&quot;,
+  &quot;--approval&quot;, &quot;auto&quot;,
+  &quot;--mode&quot;, &quot;build&quot;,
+], { encoding: &quot;utf8&quot; });
+
+const result = JSON.parse(raw);
+console.log(&quot;ok:&quot;, result.ok);
+console.log(&quot;nachricht:&quot;, result.message);
+console.log(&quot;tool calls:&quot;, result.toolCalls.length);</code></pre>
+<h3 id="asynchron">Asynchron</h3>
+<pre><code class="language-js">const { execFile } = require(&quot;node:child_process&quot;);
+const { promisify } = require(&quot;node:util&quot;);
+const execFileAsync = promisify(execFile);
+
+async function runAgent(message, options = {}) {
+  const args = [
+    &quot;agent.js&quot;,
+    &quot;-m&quot;, message,
+    &quot;--json&quot;,
+    &quot;--approval&quot;, options.approval || &quot;auto&quot;,
+    &quot;--mode&quot;, options.mode || &quot;build&quot;,
+  ];
+
+  if (options.model) {
+    args.push(&quot;--model&quot;, options.model);
+  }
+
+  if (options.file) {
+    args.push(&quot;--file&quot;, options.file);
+  }
+
+  const { stdout } = await execFileAsync(&quot;node&quot;, args, {
+    encoding: &quot;utf8&quot;,
+    timeout: 30000,
+  });
+
+  return JSON.parse(stdout);
+}
+
+// Verwendung
+const result = await runAgent(&quot;Tests ausfuehren&quot;, { mode: &quot;build&quot; });
+console.log(result.ok, result.message);</code></pre>
+<h2 id="python-subprocess">Python Subprocess</h2>
+<pre><code class="language-python">import json
+import subprocess
+
+result = subprocess.run(
+    [&quot;node&quot;, &quot;agent.js&quot;, &quot;-m&quot;, &quot;Tests ausfuehren&quot;, &quot;--json&quot;, &quot;--approval&quot;, &quot;auto&quot;],
+    capture_output=True,
+    text=True,
+    timeout=30,
+)
+
+data = json.loads(result.stdout)
+if data[&quot;ok&quot;]:
+    print(&quot;Erfolg:&quot;, data[&quot;message&quot;])
+else:
+    print(&quot;Fehler:&quot;, data.get(&quot;error&quot;, &quot;unbekannt&quot;))</code></pre>
+<h2 id="json-output-contract">JSON Output Contract</h2>
+<h3 id="erfolgs-antwort">Erfolgs-Antwort</h3>
+<pre><code class="language-json">{
+  &quot;ok&quot;: true,
+  &quot;provider&quot;: &quot;copilot&quot;,
+  &quot;model&quot;: &quot;copilot/gpt-4o&quot;,
+  &quot;mode&quot;: &quot;build&quot;,
+  &quot;approvalMode&quot;: &quot;auto&quot;,
+  &quot;toolsMode&quot;: &quot;auto&quot;,
+  &quot;toolsEnabled&quot;: true,
+  &quot;toolsFallbackUsed&quot;: false,
+  &quot;attachments&quot;: {
+    &quot;files&quot;: [],
+    &quot;images&quot;: []
+  },
+  &quot;message&quot;: &quot;Alle 42 Tests erfolgreich bestanden.&quot;,
+  &quot;toolCalls&quot;: [
+    {
+      &quot;name&quot;: &quot;run_command&quot;,
+      &quot;args&quot;: { &quot;cmd&quot;: &quot;npm test&quot; },
+      &quot;result&quot;: { &quot;ok&quot;: true, &quot;cmd&quot;: &quot;npm test&quot;, &quot;stdout&quot;: &quot;...&quot;, &quot;stderr&quot;: &quot;&quot; }
+    }
+  ],
+  &quot;timingMs&quot;: 3200
+}</code></pre>
+<h3 id="fehler-antwort">Fehler-Antwort</h3>
 <pre><code class="language-json">{
   &quot;ok&quot;: false,
-  &quot;error&quot;: &quot;Interactive approval is not supported with --json. Use --approval auto or --approval never.&quot;,
-  &quot;code&quot;: &quot;INTERACTIVE_APPROVAL_JSON&quot;
+  &quot;error&quot;: &quot;Provider &#39;openai&#39; is not configured. Setup: node agent-connect.js --provider openai&quot;,
+  &quot;code&quot;: &quot;PROVIDER_NOT_CONFIGURED&quot;
 }</code></pre>
-<h2 id="exit-handling">Exit Handling</h2>
-<ul><li><code>0</code>: erfolgreich</li><li>ungleich <code>0</code>: Fehler oder blockierte Operation</li></ul>
+<h3 id="blockierter-befehl-im-tool-call">Blockierter Befehl im Tool-Call</h3>
+<pre><code class="language-json">{
+  &quot;name&quot;: &quot;run_command&quot;,
+  &quot;args&quot;: { &quot;cmd&quot;: &quot;rm -rf /&quot; },
+  &quot;result&quot;: {
+    &quot;ok&quot;: false,
+    &quot;blocked&quot;: true,
+    &quot;mode&quot;: &quot;build&quot;,
+    &quot;policy&quot;: { &quot;source&quot;: &quot;denyCritical&quot;, &quot;rule&quot;: &quot;rm -rf /&quot; },
+    &quot;error&quot;: &quot;BLOCKED: Command not allowed in mode &#39;build&#39;: rm -rf /&quot;
+  }
+}</code></pre>
+<h3 id="felder-referenz">Felder-Referenz</h3>
+<ul><li><code>ok</code> (<code>boolean</code>) -- Ob die Anfrage erfolgreich abgeschlossen wurde</li><li><code>provider</code> (<code>string</code>) -- Verwendeter Provider</li><li><code>model</code> (<code>string</code>) -- Vollstaendige Modell-Kennung (<code>provider/model</code>)</li><li><code>mode</code> (<code>string</code>) -- Aktiver Sicherheitsmodus</li><li><code>approvalMode</code> (<code>string</code>) -- Aktiver Freigabemodus</li><li><code>toolsMode</code> (<code>string</code>) -- Konfigurierter Tools-Modus</li><li><code>toolsEnabled</code> (<code>boolean</code>) -- Ob Tools tatsaechlich an das Modell gesendet wurden</li><li><code>toolsFallbackUsed</code> (<code>boolean</code>) -- Ob Auto-Modus auf ohne-Tools zurueckgefallen ist</li><li><code>attachments</code> (<code>object</code>) -- Angehaengte Dateien und Bilder</li><li><code>message</code> (<code>string</code>) -- Finale Textantwort der KI</li><li><code>toolCalls</code> (<code>array</code>) -- Alle Tool-Calls waehrend der Session</li><li><code>timingMs</code> (<code>number</code>) -- Gesamte Ausfuehrungszeit in Millisekunden</li><li><code>error</code> (<code>string</code>) -- Fehlermeldung (nur wenn <code>ok</code> false ist)</li><li><code>code</code> (<code>string</code>) -- Fehlercode (nur wenn <code>ok</code> false ist)</li></ul>
+<h2 id="exit-codes">Exit-Codes</h2>
+<ul><li><code>0</code> -- Erfolgreiche Ausfuehrung</li><li>Ungleich null -- Fehler oder blockierte Operation</li></ul>
+<p>Fuer deterministische Automation immer die JSON-Felder <code>ok</code> und <code>code</code> parsen, anstatt sich nur auf Exit-Codes zu verlassen.</p>
         </article>
       </main>
       <aside class="right">
         <div class="toc-title">On This Page</div>
         <nav class="toc"><a href="#regeln-fuer-automation">Regeln fuer Automation</a>
 <a href="#bash">Bash</a>
+<a class="sub-item" href="#grundlegende-nutzung">Grundlegende Nutzung</a>
+<a class="sub-item" href="#json-antwort-parsen">JSON-Antwort parsen</a>
+<a class="sub-item" href="#dateien-fuer-review-anhaengen">Dateien fuer Review anhaengen</a>
+<a class="sub-item" href="#multi-datei-kontext">Multi-Datei-Kontext</a>
+<a class="sub-item" href="#ci-pipeline-check">CI-Pipeline Check</a>
 <a href="#powershell">PowerShell</a>
-<a href="#json-fehlerbeispiel">JSON Fehlerbeispiel</a>
-<a href="#exit-handling">Exit Handling</a></nav>
+<a class="sub-item" href="#grundlegende-nutzung">Grundlegende Nutzung</a>
+<a class="sub-item" href="#mit-datei-anhang">Mit Datei-Anhang</a>
+<a href="#nodejs-child-process">Node.js Child Process</a>
+<a class="sub-item" href="#synchron">Synchron</a>
+<a class="sub-item" href="#asynchron">Asynchron</a>
+<a href="#python-subprocess">Python Subprocess</a>
+<a href="#json-output-contract">JSON Output Contract</a>
+<a class="sub-item" href="#erfolgs-antwort">Erfolgs-Antwort</a>
+<a class="sub-item" href="#fehler-antwort">Fehler-Antwort</a>
+<a class="sub-item" href="#blockierter-befehl-im-tool-call">Blockierter Befehl im Tool-Call</a>
+<a class="sub-item" href="#felder-referenz">Felder-Referenz</a>
+<a href="#exit-codes">Exit-Codes</a></nav>
       </aside>
     </div>
     <script src="../assets/docs.js"></script>

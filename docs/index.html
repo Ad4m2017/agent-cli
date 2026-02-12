@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="./assets/docs.css" />
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">Agent CLI Docs</div>
@@ -23,7 +24,10 @@
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle dark/light theme">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-light"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="theme-icon-dark" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               <option value="./index.html" selected>🇺🇸 English</option>
 <option value="./de/index.html">🇩🇪 Deutsch</option>
@@ -31,94 +35,144 @@
           </div>
         </div>
         <article class="article">
-<h1 id="agent-cli-docs">Agent CLI Docs</h1>
-<p>Minimal, professional local agent CLI with provider setup, security policy, approval gates, and JSON automation.</p>
-<h2 id="overview">Overview</h2>
-<ul><li><code>agent.js</code> runs prompts and tool calls.</li><li><code>agent-connect.js</code> configures providers and defaults.</li><li><code>agent.json</code> stores runtime defaults and security policy.</li><li><code>agent.auth.json</code> stores provider credentials and tokens.</li></ul>
-<h2 id="install">Install</h2>
-<p>No npm package install is required for the agent itself.</p>
-<p>Requirements:</p>
-<ul><li>Node.js 18+ (Node.js 20+ recommended)</li><li>Internet access for model providers</li></ul>
-<h2 id="configure">Configure</h2>
-<p>Run the setup wizard:</p>
+<h1 id="agent-cli-documentation">Agent CLI Documentation</h1>
+<p>A zero-dependency, multi-provider AI agent for the terminal. No frameworks, no servers, no databases -- just Node.js and your preferred AI provider.</p>
+<h2 id="why-agent-cli">Why agent-cli?</h2>
+<ul><li>**Zero dependencies** -- no <code>node_modules</code>, no supply-chain risk</li><li>**11 providers** -- switch providers with one config change</li><li>**Security-first** -- configurable command policies prevent destructive operations</li><li>**Works everywhere** -- SSH, containers, CI, remote servers</li><li>**Local-only** -- credentials stay on your machine</li></ul>
+<h2 id="how-it-works">How It Works</h2>
+<p>agent-cli sends your prompt to an AI model via the OpenAI-compatible chat completions API. The model can respond with plain text or request tool calls. Currently, the agent supports one tool: <code>run_command</code>, which executes shell commands.</p>
+<p>The execution follows an agentic loop:</p>
+<ol><li>You send a prompt</li><li>The AI model processes the prompt</li><li>If the model needs to run a command, it issues a <code>run_command</code> tool call</li><li>The agent checks the command against security policies</li><li>If allowed, the agent executes the command and sends the output back</li><li>The model processes the output and either issues more tool calls or responds with text</li><li>The loop continues for up to 5 turns</li></ol>
+<p>This means the AI can inspect files, run tests, check git history, and reason about results -- all within a single prompt.</p>
+<h2 id="requirements">Requirements</h2>
+<ul><li>Node.js 18+ (20+ recommended)</li><li>Internet access for provider APIs</li><li>No <code>npm install</code> required</li></ul>
+<h2 id="installation">Installation</h2>
+<pre><code class="language-bash">git clone https://github.com/Ad4m2017/agent-cli.git
+cd agent-cli</code></pre>
+<p>No build step. No package installation.</p>
+<h2 id="configure-a-provider">Configure a Provider</h2>
+<p>Run the interactive setup wizard:</p>
 <pre><code class="language-bash">node agent-connect.js</code></pre>
-<p>Or configure directly:</p>
+<p>In TTY terminals, use arrow keys and Enter to navigate menus. The wizard writes:</p>
+<ul><li>Runtime defaults and security policy to <code>agent.json</code></li><li>Provider credentials to <code>agent.auth.json</code> (plaintext, file permissions set to 0600)</li></ul>
+<h3 id="direct-provider-setup">Direct Provider Setup</h3>
 <pre><code class="language-bash">node agent-connect.js --provider openai
-node agent-connect.js --provider openrouter
-node agent-connect.js --provider moonshot
+node agent-connect.js --provider copilot
+node agent-connect.js --provider groq
 node agent-connect.js --provider deepseek
-node agent-connect.js --provider copilot</code></pre>
-<p>In interactive terminals, you can select providers/models using Up/Down + Enter.</p>
-<p>The wizard writes:</p>
-<ul><li>defaults + policy to <code>agent.json</code></li><li>provider secrets to <code>agent.auth.json</code></li></ul>
-<h2 id="initialize">Initialize</h2>
-<p>Run your first prompt:</p>
-<pre><code class="language-bash">node agent.js -m &quot;Hello&quot;</code></pre>
-<p>Force a specific model/provider:</p>
-<pre><code class="language-bash">node agent.js -m &quot;Analyze this project&quot; --model copilot/gpt-4o</code></pre>
-<h2 id="usage">Usage</h2>
-<h3 id="ask-questions">Ask Questions</h3>
-<pre><code class="language-bash">node agent.js -m &quot;How is auth handled?&quot;</code></pre>
-<h3 id="build-changes">Build Changes</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Run tests and summarize failures&quot;</code></pre>
-<h3 id="json-mode-for-scripts">JSON Mode for Scripts</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Run tests&quot; --json --approval auto --mode build</code></pre>
-<h3 id="approval-modes">Approval Modes</h3>
-<ul><li><code>ask</code>: prompt per command execution</li><li><code>auto</code>: execute allowed commands automatically</li><li><code>never</code>: block command execution</li></ul>
-<p>Examples:</p>
-<pre><code class="language-bash">node agent.js -m &quot;Check repo&quot; --approval ask
-node agent.js -m &quot;Check repo&quot; --approval auto
-node agent.js -m &quot;Check repo&quot; --yes</code></pre>
-<h3 id="tools-modes">Tools Modes</h3>
-<ul><li><code>auto</code>: starts with tools, retries without tools if model/provider rejects tool-calling</li><li><code>on</code>: always sends tool-calling payload</li><li><code>off</code>: disables tool-calling</li></ul>
-<p>Examples:</p>
-<pre><code class="language-bash">node agent.js -m &quot;How are you?&quot; --model perplexity/sonar --tools off
-node agent.js -m &quot;How are you?&quot; --model perplexity/sonar --tools auto
-node agent.js -m &quot;How are you?&quot; --model perplexity/sonar --no-tools</code></pre>
-<h3 id="attach-files-and-images">Attach Files and Images</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Explain this file&quot; --file src/app.ts
-node agent.js -m &quot;Describe this UI&quot; --model openai/gpt-4o --image screenshot.png</code></pre>
-<p>Limits:</p>
-<ul><li>files: max 10, max 200KB each</li><li>images: max 5, max 5MB each (<code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code>)</li><li>image + text-only model =&gt; <code>VISION_NOT_SUPPORTED</code></li></ul>
+node agent-connect.js --provider mistral
+node agent-connect.js --provider openrouter
+node agent-connect.js --provider perplexity
+node agent-connect.js --provider together
+node agent-connect.js --provider fireworks
+node agent-connect.js --provider moonshot
+node agent-connect.js --provider xai</code></pre>
+<h3 id="copilot-setup">Copilot Setup</h3>
+<p>GitHub Copilot uses OAuth device flow. The wizard will:</p>
+<ol><li>Generate a device code</li><li>Ask you to open a URL in your browser</li><li>Enter the code on GitHub</li><li>Automatically exchange tokens once confirmed</li></ol>
+<p>Copilot tokens are short-lived. The agent refreshes them automatically before expiry.</p>
+<h2 id="first-run">First Run</h2>
+<pre><code class="language-bash">node agent.js -m &quot;What files are in this directory?&quot;</code></pre>
+<p>Force a specific provider and model:</p>
+<pre><code class="language-bash">node agent.js -m &quot;Analyze this project&quot; --model copilot/gpt-4o
+node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versatile</code></pre>
+<h2 id="concepts">Concepts</h2>
+<h3 id="tool-calling">Tool Calling</h3>
+<p>The agent provides the AI model with a <code>run_command</code> tool definition. When the model decides a shell command would help answer your question, it returns a tool call instead of text. The agent executes the command using <code>execFile</code> (not <code>exec</code> -- this prevents shell injection), sends the output back, and the model incorporates the result.</p>
+<p>This creates an agentic loop where the AI can:</p>
+<ul><li>List and read files</li><li>Run tests and linters</li><li>Check git status and history</li><li>Execute build commands</li><li>Inspect running processes</li></ul>
+<p>The loop runs for up to 5 turns before the agent forces a final text response.</p>
 <h3 id="security-modes">Security Modes</h3>
-<ul><li><code>plan</code>: strict/read-only style allow-list</li><li><code>build</code>: broader development commands</li><li><code>unsafe</code>: wildcard allow, but <code>denyCritical</code> still blocks destructive commands</li></ul>
+<p>Every command the AI wants to execute is checked against a three-layer security policy defined in <code>agent.json</code>:</p>
+<p>**Layer 1: denyCritical** -- always blocks catastrophic commands regardless of mode:</p>
+<ul><li><code>rm -rf /</code></li><li><code>mkfs</code></li><li><code>shutdown</code>, <code>reboot</code>, <code>poweroff</code></li><li><code>dd if=</code></li><li>Piping curl/wget into sh/bash</li></ul>
+<p>**Layer 2: Mode-specific deny rules** -- blocks commands based on current mode.</p>
+<p>**Layer 3: Mode-specific allow rules** -- only explicitly allowed commands can run.</p>
+<p>Evaluation order: denyCritical -&gt; deny -&gt; allow. A command must pass all three layers.</p>
+<p>The three modes:</p>
+<ul><li>**plan** -- Read-only exploration. Only <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> are allowed. Destructive commands, package installs, and pushes are blocked.</li><li>**build** (default) -- Normal development. Git, Node.js, npm, Python, Docker, Make are allowed. <code>rm</code>, <code>sudo</code>, and system-level commands are blocked.</li><li>**unsafe** -- Broad scope. All commands allowed except <code>denyCritical</code> items. Use with caution.</li></ul>
+<h3 id="approval-modes">Approval Modes</h3>
+<p>Controls human-in-the-loop behavior for command execution:</p>
+<ul><li>**ask** (default) -- The agent prompts you before every command: <code>Approve? [y/N]</code>. Requires a TTY terminal. This is the safest mode for interactive use.</li><li>**auto** -- Executes policy-allowed commands immediately without prompting. Required for CI/CD and scripting. Use with <code>--json</code> for automation.</li><li>**never** -- Blocks all command execution. The AI can only respond with text, never run commands.</li></ul>
+<h3 id="tools-modes">Tools Modes</h3>
+<p>Controls whether tool-calling payloads are included in API requests:</p>
+<ul><li>**auto** (default) -- Sends tool definitions to the model. If the model rejects them (e.g., Perplexity models), automatically retries without tools.</li><li>**on** -- Always sends tool definitions. Returns <code>TOOLS_NOT_SUPPORTED</code> error if the model cannot handle them.</li><li>**off** -- Never sends tool definitions. The AI responds with text only.</li></ul>
+<p>Use <code>--no-tools</code> as a shorthand for <code>--tools off</code>.</p>
+<h3 id="providers">Providers</h3>
+<p>All providers except Copilot use the standard OpenAI-compatible <code>/chat/completions</code> endpoint. This means any OpenAI-compatible service works.</p>
+<ul><li>**openai** -- gpt-4.1-mini, gpt-4.1, gpt-4o, gpt-4o-mini, gpt-5-mini</li><li>**copilot** -- GitHub Copilot via OAuth device flow</li><li>**deepseek** -- deepseek-chat, deepseek-reasoner, deepseek-v3</li><li>**groq** -- llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768</li><li>**mistral** -- mistral-small-latest, mistral-medium-latest, mistral-large-latest</li><li>**openrouter** -- Any model available on OpenRouter</li><li>**perplexity** -- sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro</li><li>**together** -- Llama-3.1-70B-Instruct-Turbo, Qwen2.5-72B-Instruct-Turbo</li><li>**fireworks** -- llama-v3p1-8b-instruct, qwen2p5-72b-instruct</li><li>**moonshot** -- moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k</li><li>**xai** -- grok-2-latest, grok-2-mini-latest, grok-beta</li></ul>
+<h3 id="file-and-image-attachments">File and Image Attachments</h3>
+<p>Attach files and images as context for the AI:</p>
+<pre><code class="language-bash">node agent.js -m &quot;Review this file&quot; --file src/app.ts
+node agent.js -m &quot;Describe this UI&quot; --model openai/gpt-4o --image screenshot.png
+node agent.js -m &quot;Compare these&quot; --file a.js --file b.js</code></pre>
+<p>Limits:</p>
+<ul><li>Files: max 10, max 200KB each, must be UTF-8 text</li><li>Images: max 5, max 5MB each, formats: <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code></li><li>Images require a vision-capable model (gpt-4o, gpt-4.1, gpt-5, Gemini). Text-only models return <code>VISION_NOT_SUPPORTED</code>.</li></ul>
+<h2 id="usage-examples">Usage Examples</h2>
+<h3 id="explore-a-codebase">Explore a codebase</h3>
+<pre><code class="language-bash">node agent.js -m &quot;What does this project do? Summarize the architecture.&quot;</code></pre>
+<h3 id="run-tests-and-analyze-failures">Run tests and analyze failures</h3>
+<pre><code class="language-bash">node agent.js -m &quot;Run npm test and explain any failures&quot; --approval auto --mode build</code></pre>
+<h3 id="review-a-specific-file">Review a specific file</h3>
+<pre><code class="language-bash">node agent.js -m &quot;Review this file for bugs&quot; --file src/utils.js --no-tools</code></pre>
+<h3 id="use-different-providers-for-different-tasks">Use different providers for different tasks</h3>
+<pre><code class="language-bash"># Fast reasoning
+node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versatile --no-tools
+
+# Search-augmented answers
+node agent.js -m &quot;Latest Node.js security patches?&quot; --model perplexity/sonar --no-tools
+
+# Full agent mode
+node agent.js -m &quot;Fix the failing test&quot; --model openai/gpt-4.1 --approval auto</code></pre>
+<h3 id="json-output-for-scripting">JSON output for scripting</h3>
+<pre><code class="language-bash">node agent.js -m &quot;Run tests&quot; --json --approval auto --mode build</code></pre>
 <h2 id="cli-reference">CLI Reference</h2>
 <pre><code class="language-text">node agent.js -m &quot;message&quot; [options]
 
 Options:
+  -m, --message &lt;text&gt;   Model prompt (required)
   --model &lt;provider/model|model&gt;
   --json
   --mode &lt;plan|build|unsafe&gt;
   --approval &lt;ask|auto|never&gt;
   --tools &lt;auto|on|off&gt;
   --no-tools
-  --file &lt;path&gt;
-  --image &lt;path&gt;
-  --yes
-  --unsafe
-  --log
-  --log-file &lt;path&gt;
+  --file &lt;path&gt;          (repeatable)
+  --image &lt;path&gt;         (repeatable)
+  --yes                  Alias for --approval auto
+  --unsafe               Force unsafe mode
+  --log                  Enable error logging
+  --log-file &lt;path&gt;      Default: ./agent.js.log
   --help
   --version</code></pre>
-<pre><code class="language-text">node agent-connect.js [--provider copilot|deepseek|fireworks|groq|mistral|moonshot|openai|openrouter|perplexity|together|xai]</code></pre>
+<pre><code class="language-text">node agent-connect.js [--provider &lt;name&gt;] [--help] [--version]</code></pre>
 <h2 id="troubleshooting">Troubleshooting</h2>
-<ul><li><code>PROVIDER_NOT_CONFIGURED</code>: run <code>node agent-connect.js --provider &lt;name&gt;</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code>: use <code>--approval auto|never</code> with <code>--json</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code>: run in an interactive terminal or switch to <code>--approval auto</code></li><li>Copilot re-auth: <code>node agent-connect.js --provider copilot</code></li></ul>
+<ul><li><code>PROVIDER_NOT_CONFIGURED</code>: Run <code>node agent-connect.js --provider &lt;name&gt;</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code>: Use <code>--approval auto</code> or <code>--approval never</code> with <code>--json</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code>: Run in an interactive terminal or use <code>--approval auto</code></li><li><code>VISION_NOT_SUPPORTED</code>: Use a vision model (gpt-4o, gpt-4.1) or remove <code>--image</code></li><li><code>TOOLS_NOT_SUPPORTED</code>: Use <code>--tools auto</code> or <code>--no-tools</code></li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code>: Re-run <code>node agent-connect.js --provider copilot</code></li><li><code>ATTACHMENT_TOO_LARGE</code>: File exceeds 200KB or image exceeds 5MB</li><li><code>AUTH_CONFIG_INVALID</code>: Delete <code>agent.auth.json</code> and re-run <code>node agent-connect.js</code></li></ul>
         </article>
       </main>
       <aside class="right">
         <div class="toc-title">On This Page</div>
-        <nav class="toc"><a href="#overview">Overview</a>
-<a href="#install">Install</a>
-<a href="#configure">Configure</a>
-<a href="#initialize">Initialize</a>
-<a href="#usage">Usage</a>
-<a style="padding-left:12px" href="#ask-questions">Ask Questions</a>
-<a style="padding-left:12px" href="#build-changes">Build Changes</a>
-<a style="padding-left:12px" href="#json-mode-for-scripts">JSON Mode for Scripts</a>
-<a style="padding-left:12px" href="#approval-modes">Approval Modes</a>
-<a style="padding-left:12px" href="#tools-modes">Tools Modes</a>
-<a style="padding-left:12px" href="#attach-files-and-images">Attach Files and Images</a>
-<a style="padding-left:12px" href="#security-modes">Security Modes</a>
+        <nav class="toc"><a href="#why-agent-cli">Why agent-cli?</a>
+<a href="#how-it-works">How It Works</a>
+<a href="#requirements">Requirements</a>
+<a href="#installation">Installation</a>
+<a href="#configure-a-provider">Configure a Provider</a>
+<a class="sub-item" href="#direct-provider-setup">Direct Provider Setup</a>
+<a class="sub-item" href="#copilot-setup">Copilot Setup</a>
+<a href="#first-run">First Run</a>
+<a href="#concepts">Concepts</a>
+<a class="sub-item" href="#tool-calling">Tool Calling</a>
+<a class="sub-item" href="#security-modes">Security Modes</a>
+<a class="sub-item" href="#approval-modes">Approval Modes</a>
+<a class="sub-item" href="#tools-modes">Tools Modes</a>
+<a class="sub-item" href="#providers">Providers</a>
+<a class="sub-item" href="#file-and-image-attachments">File and Image Attachments</a>
+<a href="#usage-examples">Usage Examples</a>
+<a class="sub-item" href="#explore-a-codebase">Explore a codebase</a>
+<a class="sub-item" href="#run-tests-and-analyze-failures">Run tests and analyze failures</a>
+<a class="sub-item" href="#review-a-specific-file">Review a specific file</a>
+<a class="sub-item" href="#use-different-providers-for-different-tasks">Use different providers for different tasks</a>
+<a class="sub-item" href="#json-output-for-scripting">JSON output for scripting</a>
 <a href="#cli-reference">CLI Reference</a>
 <a href="#troubleshooting">Troubleshooting</a></nav>
       </aside>
