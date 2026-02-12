@@ -12,7 +12,28 @@ const { stdin, stdout } = require("node:process");
  */
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "0.3.1";
+const CONNECT_VERSION = "0.4.0";
+
+/**
+ * Centralized error codes.
+ * Every coded error thrown by agent-connect.js references one of these constants.
+ */
+const ERROR_CODES = {
+  SELECT_OPTIONS_EMPTY: "SELECT_OPTIONS_EMPTY",
+  INTERRUPTED: "INTERRUPTED",
+  AUTH_CONFIG_INVALID: "AUTH_CONFIG_INVALID",
+  AGENT_CONFIG_INVALID: "AGENT_CONFIG_INVALID",
+  PROVIDER_INVALID: "PROVIDER_INVALID",
+  PROVIDER_UNSUPPORTED: "PROVIDER_UNSUPPORTED",
+  API_KEY_REQUIRED: "API_KEY_REQUIRED",
+  COPILOT_DEVICE_START_FAILED: "COPILOT_DEVICE_START_FAILED",
+  COPILOT_DEVICE_FLOW_FAILED: "COPILOT_DEVICE_FLOW_FAILED",
+  COPILOT_TOKEN_MISSING: "COPILOT_TOKEN_MISSING",
+  COPILOT_DEVICE_CODE_EXPIRED: "COPILOT_DEVICE_CODE_EXPIRED",
+  COPILOT_RUNTIME_TOKEN_FAILED: "COPILOT_RUNTIME_TOKEN_FAILED",
+  COPILOT_RUNTIME_TOKEN_MISSING: "COPILOT_RUNTIME_TOKEN_MISSING",
+  CONNECT_ERROR: "CONNECT_ERROR",
+};
 
 const PROVIDER_CATALOG = {
   copilot: { type: "oauth", label: "GitHub Copilot" },
@@ -92,7 +113,7 @@ function makeError(code, message) {
  */
 async function selectMenu(message, options, initialIndex = 0) {
   if (!Array.isArray(options) || options.length === 0) {
-    throw makeError("SELECT_OPTIONS_EMPTY", "Wizard options are missing.");
+    throw makeError(ERROR_CODES.SELECT_OPTIONS_EMPTY, "Wizard options are missing.");
   }
 
   if (!stdin.isTTY || !stdout.isTTY) {
@@ -144,7 +165,7 @@ async function selectMenu(message, options, initialIndex = 0) {
       if (!key) return;
 
       if (key.ctrl && key.name === "c") {
-        fail(makeError("INTERRUPTED", "Wizard interrupted."));
+        fail(makeError(ERROR_CODES.INTERRUPTED, "Wizard interrupted."));
         return;
       }
 
@@ -260,7 +281,7 @@ function loadConfig() {
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object") {
     throw makeError(
-      "AUTH_CONFIG_INVALID",
+      ERROR_CODES.AUTH_CONFIG_INVALID,
       "agent.auth.json is invalid (JSON format). Re-run setup: node agent-connect.js"
     );
   }
@@ -348,7 +369,7 @@ function loadAgentConfig() {
   const raw = fs.readFileSync(AGENT_CONFIG_FILE, "utf8");
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object") {
-    throw makeError("AGENT_CONFIG_INVALID", "agent.json is invalid (JSON format). Please check the file.");
+    throw makeError(ERROR_CODES.AGENT_CONFIG_INVALID, "agent.json is invalid (JSON format). Please check the file.");
   }
 
   const runtime = Object.assign({}, defaults.runtime, parsed.runtime || {});
@@ -401,7 +422,7 @@ async function chooseProvider(rl) {
   const answer = await rl.question(`Provider (${SORTED_PROVIDERS.join("/")}): `);
   const p = normalizeProvider(answer);
   if (!p) {
-    throw makeError("PROVIDER_INVALID", `Unknown provider. Allowed: ${SORTED_PROVIDERS.join(", ")}.`);
+    throw makeError(ERROR_CODES.PROVIDER_INVALID, `Unknown provider. Allowed: ${SORTED_PROVIDERS.join(", ")}.`);
   }
   return p;
 }
@@ -423,13 +444,13 @@ async function askYesNo(rl, question, yesDefault) {
 async function setupApiProvider(rl, providersConfig, agentConfig, provider) {
   const providerInfo = PROVIDER_CATALOG[provider];
   if (!providerInfo || providerInfo.type !== "api") {
-    throw makeError("PROVIDER_UNSUPPORTED", `Provider '${provider}' hat keinen API-Key Setup-Flow.`);
+    throw makeError(ERROR_CODES.PROVIDER_UNSUPPORTED, `Provider '${provider}' hat keinen API-Key Setup-Flow.`);
   }
 
   const keyPrompt = `${providerInfo.label} API key: `;
   const apiKey = (await rl.question(keyPrompt)).trim();
   if (!apiKey) {
-    throw makeError("API_KEY_REQUIRED", "API key is required. Aborting setup.");
+    throw makeError(ERROR_CODES.API_KEY_REQUIRED, "API key is required. Aborting setup.");
   }
 
   const defaultBase = providerInfo.baseUrl;
@@ -505,7 +526,7 @@ async function requestDeviceCode(defaults) {
   const json = await res.json();
   if (!res.ok || json.error) {
     const detail = json.error_description || json.error || `HTTP ${res.status}`;
-    throw makeError("COPILOT_DEVICE_START_FAILED", `Copilot device start failed: ${detail}`);
+    throw makeError(ERROR_CODES.COPILOT_DEVICE_START_FAILED, `Copilot device start failed: ${detail}`);
   }
 
   return json;
@@ -549,17 +570,17 @@ async function pollDeviceToken(defaults, deviceCodeData) {
     }
     if (!res.ok || json.error) {
       const detail = json.error_description || json.error || `HTTP ${res.status}`;
-      throw makeError("COPILOT_DEVICE_FLOW_FAILED", `Copilot device flow failed: ${detail}`);
+      throw makeError(ERROR_CODES.COPILOT_DEVICE_FLOW_FAILED, `Copilot device flow failed: ${detail}`);
     }
 
     if (!json.access_token) {
-      throw makeError("COPILOT_TOKEN_MISSING", "Copilot device flow returned no access token.");
+      throw makeError(ERROR_CODES.COPILOT_TOKEN_MISSING, "Copilot device flow returned no access token.");
     }
 
     return json;
   }
 
-  throw makeError("COPILOT_DEVICE_CODE_EXPIRED", "Copilot device code expired. Please run setup again.");
+  throw makeError(ERROR_CODES.COPILOT_DEVICE_CODE_EXPIRED, "Copilot device code expired. Please run setup again.");
 }
 
 /** Exchange GitHub access token for Copilot runtime token. */
@@ -576,11 +597,11 @@ async function fetchCopilotToken(defaults, githubAccessToken) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = json.message || `HTTP ${res.status}`;
-    throw makeError("COPILOT_RUNTIME_TOKEN_FAILED", `Copilot runtime token request failed: ${detail}`);
+    throw makeError(ERROR_CODES.COPILOT_RUNTIME_TOKEN_FAILED, `Copilot runtime token request failed: ${detail}`);
   }
 
   if (!json.token) {
-    throw makeError("COPILOT_RUNTIME_TOKEN_MISSING", "Copilot runtime token is missing in response.");
+    throw makeError(ERROR_CODES.COPILOT_RUNTIME_TOKEN_MISSING, "Copilot runtime token is missing in response.");
   }
 
   let expiresAt = "";
@@ -686,7 +707,7 @@ async function main() {
     } else if (PROVIDER_CATALOG[provider] && PROVIDER_CATALOG[provider].type === "api") {
       await setupApiProvider(rl, providersConfig, agentConfig, provider);
     } else {
-      throw makeError("PROVIDER_UNSUPPORTED", "Provider is not supported.");
+      throw makeError(ERROR_CODES.PROVIDER_UNSUPPORTED, "Provider is not supported.");
     }
 
     if (stdin.isTTY && stdout.isTTY) {
@@ -766,9 +787,22 @@ async function main() {
 }
 
 /** Top-level error boundary for readable CLI failures. */
-main().catch((err) => {
-  const msg = err && err.message ? err.message : String(err);
-  const code = err && err.code ? err.code : "CONNECT_ERROR";
-  process.stderr.write(`Error [${code}]: ${msg}\n`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    const msg = err && err.message ? err.message : String(err);
+    const code = err && err.code ? err.code : ERROR_CODES.CONNECT_ERROR;
+    process.stderr.write(`Error [${code}]: ${msg}\n`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  ERROR_CODES,
+  makeError,
+  getProviderMenuOptions,
+  getModelMenuOptions,
+  parseArgs,
+  normalizeProvider,
+  defaultAgentConfig,
+  getCopilotDefaults,
+};

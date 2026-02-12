@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.3.1";
+const AGENT_VERSION = "0.4.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -27,6 +27,29 @@ const IMAGE_MIME_BY_EXT = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+};
+
+/**
+ * Centralized error codes.
+ * Every coded error thrown by agent.js references one of these constants.
+ */
+const ERROR_CODES = {
+  AGENT_CONFIG_INVALID: "AGENT_CONFIG_INVALID",
+  AGENT_CONFIG_ERROR: "AGENT_CONFIG_ERROR",
+  AUTH_CONFIG_INVALID: "AUTH_CONFIG_INVALID",
+  AUTH_CONFIG_ERROR: "AUTH_CONFIG_ERROR",
+  ATTACHMENT_NOT_FOUND: "ATTACHMENT_NOT_FOUND",
+  ATTACHMENT_UNREADABLE: "ATTACHMENT_UNREADABLE",
+  ATTACHMENT_TOO_MANY_FILES: "ATTACHMENT_TOO_MANY_FILES",
+  ATTACHMENT_TOO_MANY_IMAGES: "ATTACHMENT_TOO_MANY_IMAGES",
+  ATTACHMENT_TOO_LARGE: "ATTACHMENT_TOO_LARGE",
+  ATTACHMENT_TYPE_UNSUPPORTED: "ATTACHMENT_TYPE_UNSUPPORTED",
+  PROVIDER_NOT_CONFIGURED: "PROVIDER_NOT_CONFIGURED",
+  VISION_NOT_SUPPORTED: "VISION_NOT_SUPPORTED",
+  INTERACTIVE_APPROVAL_JSON: "INTERACTIVE_APPROVAL_JSON",
+  INTERACTIVE_APPROVAL_TTY: "INTERACTIVE_APPROVAL_TTY",
+  TOOLS_NOT_SUPPORTED: "TOOLS_NOT_SUPPORTED",
+  RUNTIME_ERROR: "RUNTIME_ERROR",
 };
 
 /**
@@ -277,7 +300,7 @@ function loadAgentConfig() {
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object") {
     const e = new Error("agent.json is invalid (JSON format). Please check or recreate the file.");
-    e.code = "AGENT_CONFIG_INVALID";
+    e.code = ERROR_CODES.AGENT_CONFIG_INVALID;
     throw e;
   }
 
@@ -303,7 +326,7 @@ function loadProviderConfig() {
   const parsed = JSON.parse(raw);
   if (!parsed || typeof parsed !== "object") {
     const e = new Error("agent.auth.json is invalid (JSON format). Re-run setup: node agent-connect.js");
-    e.code = "AUTH_CONFIG_INVALID";
+    e.code = ERROR_CODES.AUTH_CONFIG_INVALID;
     throw e;
   }
 
@@ -335,13 +358,13 @@ function ensureReadableFile(filePath) {
     stat = fs.statSync(filePath);
   } catch {
     const e = new Error(`Attachment file not found: ${filePath}`);
-    e.code = "ATTACHMENT_NOT_FOUND";
+    e.code = ERROR_CODES.ATTACHMENT_NOT_FOUND;
     throw e;
   }
 
   if (!stat.isFile()) {
     const e = new Error(`Attachment path is not a file: ${filePath}`);
-    e.code = "ATTACHMENT_UNREADABLE";
+    e.code = ERROR_CODES.ATTACHMENT_UNREADABLE;
     throw e;
   }
 
@@ -356,13 +379,13 @@ function detectImageMime(filePath) {
 function collectAttachments(opts) {
   if (opts.files.length > MAX_FILES) {
     const e = new Error(`Too many files. Maximum is ${MAX_FILES}.`);
-    e.code = "ATTACHMENT_TOO_MANY_FILES";
+    e.code = ERROR_CODES.ATTACHMENT_TOO_MANY_FILES;
     throw e;
   }
 
   if (opts.images.length > MAX_IMAGES) {
     const e = new Error(`Too many images. Maximum is ${MAX_IMAGES}.`);
-    e.code = "ATTACHMENT_TOO_MANY_IMAGES";
+    e.code = ERROR_CODES.ATTACHMENT_TOO_MANY_IMAGES;
     throw e;
   }
 
@@ -371,7 +394,7 @@ function collectAttachments(opts) {
     const stat = ensureReadableFile(abs);
     if (stat.size > MAX_FILE_BYTES) {
       const e = new Error(`File too large (${stat.size} bytes): ${rawPath}. Max ${MAX_FILE_BYTES} bytes.`);
-      e.code = "ATTACHMENT_TOO_LARGE";
+      e.code = ERROR_CODES.ATTACHMENT_TOO_LARGE;
       throw e;
     }
 
@@ -380,7 +403,7 @@ function collectAttachments(opts) {
       content = fs.readFileSync(abs, "utf8");
     } catch {
       const e = new Error(`File is not readable as UTF-8 text: ${rawPath}`);
-      e.code = "ATTACHMENT_UNREADABLE";
+      e.code = ERROR_CODES.ATTACHMENT_UNREADABLE;
       throw e;
     }
 
@@ -397,14 +420,14 @@ function collectAttachments(opts) {
     const stat = ensureReadableFile(abs);
     if (stat.size > MAX_IMAGE_BYTES) {
       const e = new Error(`Image too large (${stat.size} bytes): ${rawPath}. Max ${MAX_IMAGE_BYTES} bytes.`);
-      e.code = "ATTACHMENT_TOO_LARGE";
+      e.code = ERROR_CODES.ATTACHMENT_TOO_LARGE;
       throw e;
     }
 
     const mime = detectImageMime(abs);
     if (!mime) {
       const e = new Error(`Unsupported image type: ${rawPath}. Allowed: .png, .jpg, .jpeg, .webp`);
-      e.code = "ATTACHMENT_TYPE_UNSUPPORTED";
+      e.code = ERROR_CODES.ATTACHMENT_TYPE_UNSUPPORTED;
       throw e;
     }
 
@@ -1034,7 +1057,7 @@ async function createProviderRuntime(config, selection) {
     const e = new Error(
       `Provider '${providerName}' is not configured. Setup: node agent-connect.js --provider ${providerName}`
     );
-    e.code = "PROVIDER_NOT_CONFIGURED";
+    e.code = ERROR_CODES.PROVIDER_NOT_CONFIGURED;
     throw e;
   }
 
@@ -1139,7 +1162,7 @@ async function main() {
     agentConfig = loadAgentConfig();
   } catch (err) {
     const e = new Error(`Failed to load agent.json: ${err.message}`);
-    e.code = err && err.code ? err.code : "AGENT_CONFIG_ERROR";
+    e.code = err && err.code ? err.code : ERROR_CODES.AGENT_CONFIG_ERROR;
     throw e;
   }
 
@@ -1147,7 +1170,7 @@ async function main() {
     providerConfig = loadProviderConfig();
   } catch (err) {
     const e = new Error(`Failed to load agent.auth.json: ${err.message}`);
-    e.code = err && err.code ? err.code : "AUTH_CONFIG_ERROR";
+    e.code = err && err.code ? err.code : ERROR_CODES.AUTH_CONFIG_ERROR;
     throw e;
   }
 
@@ -1156,7 +1179,7 @@ async function main() {
     const e = new Error(
       "No provider configured. Start setup: node agent-connect.js | Or use --model <provider/model> (for example --model copilot/gpt-4o)."
     );
-    e.code = "PROVIDER_NOT_CONFIGURED";
+    e.code = ERROR_CODES.PROVIDER_NOT_CONFIGURED;
     throw e;
   }
   const approvalMode = getEffectiveApprovalMode(opts, agentConfig);
@@ -1167,19 +1190,19 @@ async function main() {
     const e = new Error(
       `Model '${selection.provider}/${selection.model}' is likely text-only. Image attachments require a vision-capable model.`
     );
-    e.code = "VISION_NOT_SUPPORTED";
+    e.code = ERROR_CODES.VISION_NOT_SUPPORTED;
     throw e;
   }
 
   if (opts.json && approvalMode === "ask") {
     const e = new Error("Interactive approval is not supported with --json. Use --approval auto or --approval never.");
-    e.code = "INTERACTIVE_APPROVAL_JSON";
+    e.code = ERROR_CODES.INTERACTIVE_APPROVAL_JSON;
     throw e;
   }
 
   if (approvalMode === "ask" && (!process.stdin.isTTY || !process.stderr.isTTY)) {
     const e = new Error("Interactive approval requires a TTY. Use --approval auto or --approval never.");
-    e.code = "INTERACTIVE_APPROVAL_TTY";
+    e.code = ERROR_CODES.INTERACTIVE_APPROVAL_TTY;
     throw e;
   }
 
@@ -1246,14 +1269,14 @@ async function main() {
         const e = new Error(
           "This model does not support tool calling. Use --tools off, --tools auto, or --no-tools."
         );
-        e.code = "TOOLS_NOT_SUPPORTED";
+        e.code = ERROR_CODES.TOOLS_NOT_SUPPORTED;
         throw e;
       }
       if (attachments.images.length > 0 && isVisionUnsupportedError(err)) {
         const e = new Error(
           `Model '${runtime.provider}/${runtime.model}' rejected image input. Use a vision-capable model or remove --image.`
         );
-        e.code = "VISION_NOT_SUPPORTED";
+        e.code = ERROR_CODES.VISION_NOT_SUPPORTED;
         throw e;
       }
       throw err;
@@ -1325,18 +1348,47 @@ async function main() {
 }
 
 /** Top-level error boundary for consistent CLI error handling. */
-main().catch((err) => {
-  const opts = parseCliArgs(process.argv.slice(2));
-  appendErrorLog(opts.log, opts.logFile, err);
+if (require.main === module) {
+  main().catch((err) => {
+    const opts = parseCliArgs(process.argv.slice(2));
+    appendErrorLog(opts.log, opts.logFile, err);
 
-  const msg = err && err.message ? err.message : String(err);
-  if (opts.json) {
-    process.stdout.write(
-      `${JSON.stringify({ ok: false, error: msg, code: err && err.code ? err.code : "RUNTIME_ERROR" }, null, 2)}\n`
-    );
-  } else {
-    process.stderr.write(`Error: ${msg}\n`);
-  }
+    const msg = err && err.message ? err.message : String(err);
+    if (opts.json) {
+      process.stdout.write(
+        `${JSON.stringify({ ok: false, error: msg, code: err && err.code ? err.code : ERROR_CODES.RUNTIME_ERROR }, null, 2)}\n`
+      );
+    } else {
+      process.stderr.write(`Error: ${msg}\n`);
+    }
 
-  process.exit(1);
-});
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  ERROR_CODES,
+  parseCliArgs,
+  defaultAgentConfig,
+  splitProviderModel,
+  resolveModelSelection,
+  getProviderEntry,
+  tokenizeCommand,
+  matchesPolicyRule,
+  evaluateCommandPolicy,
+  getEffectiveMode,
+  getEffectiveApprovalMode,
+  getEffectiveToolsMode,
+  isToolUnsupportedError,
+  modelLikelySupportsVision,
+  isVisionUnsupportedError,
+  buildUserMessageContent,
+  extractAssistantText,
+  detectImageMime,
+  parseDateMs,
+  formatIsoFromSeconds,
+  isTokenStillValid,
+  nowMs,
+  buildCopilotAdapter,
+  toAbsolutePath,
+};

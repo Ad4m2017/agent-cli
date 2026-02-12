@@ -1,0 +1,34 @@
+{
+  "name": "agent-cli",
+  "version": "0.4.0",
+  "description": "Zero-dependency AI coding agent for the terminal. Supports GitHub Copilot, OpenAI, Anthropic, Groq, DeepSeek, and more via the OpenAI-compatible API standard.",
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "agent",
+    "cli",
+    "copilot",
+    "openai",
+    "anthropic",
+    "coding-agent",
+    "tool-calling",
+    "zero-dependency"
+  ],
+  "bin": {
+    "agent": "./agent.js",
+    "agent-connect": "./agent-connect.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "build:docs": "node scripts/build-docs.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "agent.js",
+    "agent-connect.js",
+    "LICENSE",
+    "README.md"
+  ]
+}

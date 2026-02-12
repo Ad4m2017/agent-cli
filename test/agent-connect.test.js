@@ -1,0 +1,297 @@
+/**
+ * Unit tests for pure functions exported from agent-connect.js.
+ * Uses Node.js built-in test runner (node:test) — zero dependencies.
+ */
+
+const { describe, it } = require("node:test");
+const assert = require("node:assert/strict");
+
+const {
+  ERROR_CODES,
+  makeError,
+  getProviderMenuOptions,
+  getModelMenuOptions,
+  parseArgs,
+  normalizeProvider,
+  defaultAgentConfig,
+  getCopilotDefaults,
+} = require("../agent-connect.js");
+
+// ---------------------------------------------------------------------------
+// ERROR_CODES
+// ---------------------------------------------------------------------------
+describe("ERROR_CODES (connect)", () => {
+  it("exports all expected error codes", () => {
+    const expected = [
+      "SELECT_OPTIONS_EMPTY",
+      "INTERRUPTED",
+      "AUTH_CONFIG_INVALID",
+      "AGENT_CONFIG_INVALID",
+      "PROVIDER_INVALID",
+      "PROVIDER_UNSUPPORTED",
+      "API_KEY_REQUIRED",
+      "COPILOT_DEVICE_START_FAILED",
+      "COPILOT_DEVICE_FLOW_FAILED",
+      "COPILOT_TOKEN_MISSING",
+      "COPILOT_DEVICE_CODE_EXPIRED",
+      "COPILOT_RUNTIME_TOKEN_FAILED",
+      "COPILOT_RUNTIME_TOKEN_MISSING",
+      "CONNECT_ERROR",
+    ];
+    for (const code of expected) {
+      assert.equal(ERROR_CODES[code], code);
+    }
+  });
+
+  it("key equals value for every entry", () => {
+    for (const [key, value] of Object.entries(ERROR_CODES)) {
+      assert.equal(key, value);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// makeError
+// ---------------------------------------------------------------------------
+describe("makeError", () => {
+  it("creates an Error with code property", () => {
+    const err = makeError("TEST_CODE", "test message");
+    assert.ok(err instanceof Error);
+    assert.equal(err.message, "test message");
+    assert.equal(err.code, "TEST_CODE");
+  });
+
+  it("creates errors with different codes", () => {
+    const err = makeError(ERROR_CODES.INTERRUPTED, "interrupted");
+    assert.equal(err.code, "INTERRUPTED");
+    assert.equal(err.message, "interrupted");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getProviderMenuOptions
+// ---------------------------------------------------------------------------
+describe("getProviderMenuOptions", () => {
+  it("returns an array of provider options", () => {
+    const options = getProviderMenuOptions();
+    assert.ok(Array.isArray(options));
+    assert.ok(options.length > 0);
+  });
+
+  it("each option has value and label", () => {
+    const options = getProviderMenuOptions();
+    for (const opt of options) {
+      assert.ok(typeof opt.value === "string");
+      assert.ok(typeof opt.label === "string");
+      assert.ok(opt.value.length > 0);
+      assert.ok(opt.label.length > 0);
+    }
+  });
+
+  it("options are sorted alphabetically by value", () => {
+    const options = getProviderMenuOptions();
+    const values = options.map((o) => o.value);
+    const sorted = [...values].sort((a, b) => a.localeCompare(b));
+    assert.deepEqual(values, sorted);
+  });
+
+  it("includes known providers", () => {
+    const options = getProviderMenuOptions();
+    const values = options.map((o) => o.value);
+    assert.ok(values.includes("copilot"));
+    assert.ok(values.includes("openai"));
+    assert.ok(values.includes("groq"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getModelMenuOptions
+// ---------------------------------------------------------------------------
+describe("getModelMenuOptions", () => {
+  it("returns model options for a valid provider", () => {
+    const options = getModelMenuOptions("openai");
+    assert.ok(Array.isArray(options));
+    assert.ok(options.length >= 2); // at least one model + custom
+  });
+
+  it("always includes Custom model as last option", () => {
+    const options = getModelMenuOptions("openai");
+    const last = options[options.length - 1];
+    assert.equal(last.value, "__custom__");
+    assert.equal(last.label, "Custom model");
+  });
+
+  it("model values have provider/ prefix", () => {
+    const options = getModelMenuOptions("groq");
+    const modelOptions = options.filter((o) => o.value !== "__custom__");
+    for (const opt of modelOptions) {
+      assert.ok(opt.value.startsWith("groq/"), `Expected groq/ prefix, got: ${opt.value}`);
+    }
+  });
+
+  it("returns only custom option for unknown provider", () => {
+    const options = getModelMenuOptions("unknown_provider");
+    assert.equal(options.length, 1);
+    assert.equal(options[0].value, "__custom__");
+  });
+
+  it("returns only custom option for copilot (oauth type, no models array)", () => {
+    const options = getModelMenuOptions("copilot");
+    // copilot has no models array in PROVIDER_CATALOG
+    assert.equal(options[options.length - 1].value, "__custom__");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseArgs
+// ---------------------------------------------------------------------------
+describe("parseArgs (connect)", () => {
+  it("returns defaults for empty argv", () => {
+    const opts = parseArgs([]);
+    assert.equal(opts.provider, "");
+    assert.equal(opts.help, false);
+    assert.equal(opts.version, false);
+  });
+
+  it("parses --provider", () => {
+    const opts = parseArgs(["--provider", "openai"]);
+    assert.equal(opts.provider, "openai");
+  });
+
+  it("parses -h / --help", () => {
+    assert.equal(parseArgs(["-h"]).help, true);
+    assert.equal(parseArgs(["--help"]).help, true);
+  });
+
+  it("parses -V / --version", () => {
+    assert.equal(parseArgs(["-V"]).version, true);
+    assert.equal(parseArgs(["--version"]).version, true);
+  });
+
+  it("handles combined flags", () => {
+    const opts = parseArgs(["--provider", "copilot", "--help"]);
+    assert.equal(opts.provider, "copilot");
+    assert.equal(opts.help, true);
+  });
+
+  it("handles missing --provider value gracefully", () => {
+    const opts = parseArgs(["--provider"]);
+    assert.equal(opts.provider, "");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// normalizeProvider
+// ---------------------------------------------------------------------------
+describe("normalizeProvider", () => {
+  it("normalizes copilot aliases", () => {
+    assert.equal(normalizeProvider("copilot"), "copilot");
+    assert.equal(normalizeProvider("github"), "copilot");
+    assert.equal(normalizeProvider("github-copilot"), "copilot");
+  });
+
+  it("normalizes xAI alias", () => {
+    assert.equal(normalizeProvider("x.ai"), "xai");
+    assert.equal(normalizeProvider("xai"), "xai");
+  });
+
+  it("passes through known providers unchanged", () => {
+    assert.equal(normalizeProvider("openai"), "openai");
+    assert.equal(normalizeProvider("groq"), "groq");
+    assert.equal(normalizeProvider("deepseek"), "deepseek");
+    assert.equal(normalizeProvider("openrouter"), "openrouter");
+    assert.equal(normalizeProvider("perplexity"), "perplexity");
+  });
+
+  it("is case-insensitive", () => {
+    assert.equal(normalizeProvider("OpenAI"), "openai");
+    assert.equal(normalizeProvider("COPILOT"), "copilot");
+    assert.equal(normalizeProvider("GitHub"), "copilot");
+  });
+
+  it("trims whitespace", () => {
+    assert.equal(normalizeProvider("  openai  "), "openai");
+  });
+
+  it("returns empty string for unknown providers", () => {
+    assert.equal(normalizeProvider("unknown"), "");
+    assert.equal(normalizeProvider("notaprovider"), "");
+  });
+
+  it("returns empty string for falsy input", () => {
+    assert.equal(normalizeProvider(""), "");
+    assert.equal(normalizeProvider(null), "");
+    assert.equal(normalizeProvider(undefined), "");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// defaultAgentConfig (connect)
+// ---------------------------------------------------------------------------
+describe("defaultAgentConfig (connect)", () => {
+  it("returns a valid config object", () => {
+    const cfg = defaultAgentConfig();
+    assert.equal(cfg.version, 1);
+    assert.ok(cfg.runtime);
+    assert.ok(cfg.security);
+  });
+
+  it("has same structure as agent.js defaultAgentConfig", () => {
+    const cfg = defaultAgentConfig();
+    assert.equal(cfg.runtime.defaultMode, "build");
+    assert.equal(cfg.runtime.defaultApprovalMode, "ask");
+    assert.equal(cfg.runtime.defaultToolsMode, "auto");
+    assert.ok(Array.isArray(cfg.security.denyCritical));
+    assert.ok(cfg.security.modes.plan);
+    assert.ok(cfg.security.modes.build);
+    assert.ok(cfg.security.modes.unsafe);
+  });
+
+  it("returns fresh object each call", () => {
+    const a = defaultAgentConfig();
+    const b = defaultAgentConfig();
+    assert.notEqual(a, b);
+    assert.notEqual(a.runtime, b.runtime);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCopilotDefaults
+// ---------------------------------------------------------------------------
+describe("getCopilotDefaults", () => {
+  it("returns oauth configuration", () => {
+    const defaults = getCopilotDefaults();
+    assert.ok(defaults.oauth);
+    assert.ok(defaults.oauth.clientId);
+    assert.ok(defaults.oauth.deviceCodeUrl);
+    assert.ok(defaults.oauth.accessTokenUrl);
+  });
+
+  it("returns api configuration", () => {
+    const defaults = getCopilotDefaults();
+    assert.ok(defaults.api);
+    assert.ok(defaults.api.copilotTokenUrl);
+    assert.ok(defaults.api.baseUrl);
+  });
+
+  it("returns extra headers", () => {
+    const defaults = getCopilotDefaults();
+    assert.ok(defaults.extraHeaders);
+    assert.ok(defaults.extraHeaders["Editor-Version"]);
+    assert.ok(defaults.extraHeaders["User-Agent"]);
+  });
+
+  it("returns fresh object each call", () => {
+    const a = getCopilotDefaults();
+    const b = getCopilotDefaults();
+    assert.notEqual(a, b);
+    assert.notEqual(a.oauth, b.oauth);
+  });
+
+  it("has valid GitHub OAuth endpoints", () => {
+    const defaults = getCopilotDefaults();
+    assert.ok(defaults.oauth.deviceCodeUrl.includes("github.com"));
+    assert.ok(defaults.oauth.accessTokenUrl.includes("github.com"));
+    assert.ok(defaults.api.copilotTokenUrl.includes("github.com"));
+  });
+});
