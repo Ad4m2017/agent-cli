@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Konfiguration | Agent CLI Docs</title>
+    <link rel="stylesheet" href="../assets/docs.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent CLI Docs</div>
+        <p class="hint">Minimal + professional terminal agent</p>
+        <nav class="nav"><a class="" href="./index.html">Einstieg</a>
+<a class="" href="./api-examples.html">Skripte</a>
+<a class="active" href="./config-reference.html">Konfiguration</a></nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1 class="title">Konfiguration</h1>
+            <p class="subtitle">Dokumentation im modernen Layout fuer CLI-Workflows.</p>
+          </div>
+          <div class="controls">
+            <button id="nav-toggle" class="mobile-toggle">Menu</button>
+            <button id="theme-toggle">Toggle Theme</button>
+            <select id="lang-switch" class="lang-select" aria-label="Select language">
+              <option value="../config-reference.html">🇺🇸 English</option>
+<option value="./config-reference.html" selected>🇩🇪 Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <article class="article">
+<h1 id="konfigurationsreferenz">Konfigurationsreferenz</h1>
+<p>Referenz fuer <code>agent.json</code> und <code>agent.auth.json</code>.</p>
+<h2 id="doku-bauen">Doku bauen</h2>
+<pre><code class="language-bash">node scripts/build-docs.js</code></pre>
+<h2 id="agentjson">agent.json</h2>
+<p>Nicht-sensitive Runtime- und Sicherheitskonfiguration.</p>
+<h3 id="runtime">runtime</h3>
+<ul><li><code>defaultProvider</code></li><li><code>defaultModel</code></li><li><code>defaultMode</code> (<code>plan|build|unsafe</code>)</li><li><code>defaultApprovalMode</code> (<code>ask|auto|never</code>)</li><li><code>defaultToolsMode</code> (<code>auto|on|off</code>)</li></ul>
+<h3 id="security">security</h3>
+<ul><li><code>denyCritical</code></li><li><code>modes.&lt;mode&gt;.allow</code></li><li><code>modes.&lt;mode&gt;.deny</code></li></ul>
+<p>Entscheidungsreihenfolge:</p>
+<ol><li><code>denyCritical</code></li><li><code>deny</code></li><li><code>allow</code></li></ol>
+<h2 id="agentauthjson">agent.auth.json</h2>
+<p>Secrets, Tokens und Provider-Transportdaten.</p>
+<h3 id="openai-kompatibel">OpenAI-kompatibel</h3>
+<ul><li><code>kind: openai_compatible</code></li><li><code>baseUrl</code></li><li><code>apiKey</code></li></ul>
+<h3 id="github-copilot">GitHub Copilot</h3>
+<ul><li><code>kind: github_copilot</code></li><li>OAuth- und Runtime-Tokens</li></ul>
+<h2 id="error-codes">Error-Codes</h2>
+<h3 id="agentjs">agent.js</h3>
+<ul><li><code>ATTACHMENT_NOT_FOUND</code></li><li><code>ATTACHMENT_UNREADABLE</code></li><li><code>ATTACHMENT_TOO_LARGE</code></li><li><code>ATTACHMENT_TOO_MANY_FILES</code></li><li><code>ATTACHMENT_TOO_MANY_IMAGES</code></li><li><code>ATTACHMENT_TYPE_UNSUPPORTED</code></li><li><code>VISION_NOT_SUPPORTED</code></li><li><code>PROVIDER_NOT_CONFIGURED</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code></li><li><code>TOOLS_NOT_SUPPORTED</code></li></ul>
+<h3 id="agent-connectjs">agent-connect.js</h3>
+<ul><li><code>PROVIDER_INVALID</code></li><li><code>API_KEY_REQUIRED</code></li><li><code>COPILOT_DEVICE_START_FAILED</code></li><li><code>COPILOT_DEVICE_FLOW_FAILED</code></li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code></li><li><code>COPILOT_RUNTIME_TOKEN_FAILED</code></li></ul>
+        </article>
+      </main>
+      <aside class="right">
+        <div class="toc-title">On This Page</div>
+        <nav class="toc"><a href="#doku-bauen">Doku bauen</a>
+<a href="#agentjson">agent.json</a>
+<a style="padding-left:12px" href="#runtime">runtime</a>
+<a style="padding-left:12px" href="#security">security</a>
+<a href="#agentauthjson">agent.auth.json</a>
+<a style="padding-left:12px" href="#openai-kompatibel">OpenAI-kompatibel</a>
+<a style="padding-left:12px" href="#github-copilot">GitHub Copilot</a>
+<a href="#error-codes">Error-Codes</a>
+<a style="padding-left:12px" href="#agentjs">agent.js</a>
+<a style="padding-left:12px" href="#agent-connectjs">agent-connect.js</a></nav>
+      </aside>
+    </div>
+    <script src="../assets/docs.js"></script>
+  </body>
+</html>

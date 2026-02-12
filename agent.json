@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "runtime": {
+    "defaultProvider": "copilot",
+    "defaultModel": "copilot/gpt-5-mini",
+    "defaultMode": "build",
+    "defaultApprovalMode": "auto",
+    "defaultToolsMode": "auto"
+  },
+  "security": {
+    "mode": "build",
+    "denyCritical": [
+      "rm -rf /",
+      "mkfs",
+      "shutdown",
+      "reboot",
+      "poweroff",
+      "dd if=",
+      "re:curl\\s+.*\\|\\s*(sh|bash)",
+      "re:wget\\s+.*\\|\\s*(sh|bash)"
+    ],
+    "modes": {
+      "plan": {
+        "allow": [
+          "pwd",
+          "ls",
+          "whoami",
+          "date",
+          "git status",
+          "git branch",
+          "git diff",
+          "git log",
+          "node -v",
+          "npm -v"
+        ],
+        "deny": [
+          "rm",
+          "sudo",
+          "chmod",
+          "chown",
+          "mv",
+          "cp",
+          "docker",
+          "npm install",
+          "git push"
+        ]
+      },
+      "build": {
+        "allow": [
+          "pwd",
+          "ls",
+          "whoami",
+          "date",
+          "git",
+          "node",
+          "npm",
+          "pnpm",
+          "yarn",
+          "bun",
+          "python",
+          "pytest",
+          "go",
+          "cargo",
+          "make",
+          "docker",
+          "curl"
+        ],
+        "deny": [
+          "rm",
+          "sudo",
+          "shutdown",
+          "reboot",
+          "mkfs",
+          "chown"
+        ]
+      },
+      "unsafe": {
+        "allow": [
+          "*"
+        ],
+        "deny": [
+          "rm -rf /",
+          "mkfs",
+          "shutdown",
+          "reboot",
+          "poweroff"
+        ]
+      }
+    }
+  }
+}

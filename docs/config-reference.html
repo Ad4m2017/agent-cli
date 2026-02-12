@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Config | Agent CLI Docs</title>
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent CLI Docs</div>
+        <p class="hint">Minimal + professional terminal agent</p>
+        <nav class="nav"><a class="" href="./index.html">Get Started</a>
+<a class="" href="./api-examples.html">Scripts</a>
+<a class="active" href="./config-reference.html">Config</a></nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1 class="title">Config</h1>
+            <p class="subtitle">Documentation in a modern docs layout for CLI workflows.</p>
+          </div>
+          <div class="controls">
+            <button id="nav-toggle" class="mobile-toggle">Menu</button>
+            <button id="theme-toggle">Toggle Theme</button>
+            <select id="lang-switch" class="lang-select" aria-label="Select language">
+              <option value="./config-reference.html" selected>🇺🇸 English</option>
+<option value="./de/config-reference.html">🇩🇪 Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <article class="article">
+<h1 id="config-reference">Config Reference</h1>
+<p>Complete reference for <code>agent.json</code> and <code>agent.auth.json</code>.</p>
+<h2 id="build-docs">Build Docs</h2>
+<p>Whenever you change markdown docs, rebuild HTML pages:</p>
+<pre><code class="language-bash">node scripts/build-docs.js</code></pre>
+<h2 id="agentjson">agent.json</h2>
+<p><code>agent.json</code> contains non-secret runtime defaults and security rules.</p>
+<h3 id="runtime">runtime</h3>
+<ul><li><code>defaultProvider</code> (<code>string</code>)</li><li><code>defaultModel</code> (<code>string</code>)</li><li><code>defaultMode</code> (<code>plan|build|unsafe</code>)</li><li><code>defaultApprovalMode</code> (<code>ask|auto|never</code>)</li><li><code>defaultToolsMode</code> (<code>auto|on|off</code>)</li><li><code>approvalTimeoutMs</code> (<code>number</code>, optional)</li></ul>
+<h3 id="security">security</h3>
+<ul><li><code>mode</code> (<code>plan|build|unsafe</code>)</li><li><code>denyCritical</code> (<code>string[]</code>)</li><li><code>modes.&lt;mode&gt;.allow</code> (<code>string[]</code>)</li><li><code>modes.&lt;mode&gt;.deny</code> (<code>string[]</code>)</li></ul>
+<p>Decision order:</p>
+<ol><li><code>denyCritical</code></li><li><code>modes[mode].deny</code></li><li><code>modes[mode].allow</code></li></ol>
+<h2 id="agentauthjson">agent.auth.json</h2>
+<p><code>agent.auth.json</code> stores credentials/tokens and provider-specific transport settings.</p>
+<h3 id="openai-compatible-provider">OpenAI-compatible provider</h3>
+<ul><li><code>kind</code>: <code>openai_compatible</code></li><li><code>baseUrl</code></li><li><code>apiKey</code></li></ul>
+<h3 id="github-copilot-provider">GitHub Copilot provider</h3>
+<ul><li><code>kind</code>: <code>github_copilot</code></li><li><code>githubToken</code>, <code>githubRefreshToken</code>, <code>githubTokenExpiresAt</code></li><li><code>copilotToken</code>, <code>copilotTokenExpiresAt</code></li><li><code>oauth</code>, <code>api</code>, <code>extraHeaders</code></li></ul>
+<h2 id="error-code-reference">Error Code Reference</h2>
+<h3 id="agentjs">agent.js</h3>
+<ul><li><code>ATTACHMENT_NOT_FOUND</code></li><li><code>ATTACHMENT_UNREADABLE</code></li><li><code>ATTACHMENT_TOO_LARGE</code></li><li><code>ATTACHMENT_TOO_MANY_FILES</code></li><li><code>ATTACHMENT_TOO_MANY_IMAGES</code></li><li><code>ATTACHMENT_TYPE_UNSUPPORTED</code></li><li><code>VISION_NOT_SUPPORTED</code></li><li><code>PROVIDER_NOT_CONFIGURED</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code></li><li><code>TOOLS_NOT_SUPPORTED</code></li><li><code>AGENT_CONFIG_INVALID</code></li><li><code>AUTH_CONFIG_INVALID</code></li><li><code>AGENT_CONFIG_ERROR</code></li><li><code>AUTH_CONFIG_ERROR</code></li><li><code>RUNTIME_ERROR</code></li></ul>
+<h3 id="agent-connectjs">agent-connect.js</h3>
+<ul><li><code>PROVIDER_INVALID</code></li><li><code>API_KEY_REQUIRED</code></li><li><code>AUTH_CONFIG_INVALID</code></li><li><code>AGENT_CONFIG_INVALID</code></li><li><code>COPILOT_DEVICE_START_FAILED</code></li><li><code>COPILOT_DEVICE_FLOW_FAILED</code></li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code></li><li><code>COPILOT_RUNTIME_TOKEN_FAILED</code></li><li><code>PROVIDER_UNSUPPORTED</code></li><li><code>CONNECT_ERROR</code></li></ul>
+        </article>
+      </main>
+      <aside class="right">
+        <div class="toc-title">On This Page</div>
+        <nav class="toc"><a href="#build-docs">Build Docs</a>
+<a href="#agentjson">agent.json</a>
+<a style="padding-left:12px" href="#runtime">runtime</a>
+<a style="padding-left:12px" href="#security">security</a>
+<a href="#agentauthjson">agent.auth.json</a>
+<a style="padding-left:12px" href="#openai-compatible-provider">OpenAI-compatible provider</a>
+<a style="padding-left:12px" href="#github-copilot-provider">GitHub Copilot provider</a>
+<a href="#error-code-reference">Error Code Reference</a>
+<a style="padding-left:12px" href="#agentjs">agent.js</a>
+<a style="padding-left:12px" href="#agent-connectjs">agent-connect.js</a></nav>
+      </aside>
+    </div>
+    <script src="./assets/docs.js"></script>
+  </body>
+</html>

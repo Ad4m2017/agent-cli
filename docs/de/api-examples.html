@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Skripte | Agent CLI Docs</title>
+    <link rel="stylesheet" href="../assets/docs.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent CLI Docs</div>
+        <p class="hint">Minimal + professional terminal agent</p>
+        <nav class="nav"><a class="" href="./index.html">Einstieg</a>
+<a class="active" href="./api-examples.html">Skripte</a>
+<a class="" href="./config-reference.html">Konfiguration</a></nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1 class="title">Skripte</h1>
+            <p class="subtitle">Dokumentation im modernen Layout fuer CLI-Workflows.</p>
+          </div>
+          <div class="controls">
+            <button id="nav-toggle" class="mobile-toggle">Menu</button>
+            <button id="theme-toggle">Toggle Theme</button>
+            <select id="lang-switch" class="lang-select" aria-label="Select language">
+              <option value="../api-examples.html">🇺🇸 English</option>
+<option value="./api-examples.html" selected>🇩🇪 Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <article class="article">
+<h1 id="skript--und-ci-beispiele">Skript- und CI-Beispiele</h1>
+<p>Diese Beispiele helfen bei stabiler JSON-Automation.</p>
+<h2 id="regeln-fuer-automation">Regeln fuer Automation</h2>
+<ul><li>Immer <code>--json</code> verwenden</li><li><code>--approval auto</code> oder <code>--approval never</code> nutzen</li><li><code>--approval ask</code> in Automation vermeiden</li></ul>
+<h2 id="bash">Bash</h2>
+<pre><code class="language-bash">set -euo pipefail
+
+OUT=$(node agent.js -m &quot;Run tests and summarize&quot; --json --approval auto --mode build)
+echo &quot;$OUT&quot;</code></pre>
+<h2 id="powershell">PowerShell</h2>
+<pre><code class="language-powershell">$out = node agent.js -m &quot;Run tests and summarize&quot; --json --approval auto --mode build
+$obj = $out | ConvertFrom-Json
+$obj.message</code></pre>
+<h2 id="json-fehlerbeispiel">JSON Fehlerbeispiel</h2>
+<pre><code class="language-json">{
+  &quot;ok&quot;: false,
+  &quot;error&quot;: &quot;Interactive approval is not supported with --json. Use --approval auto or --approval never.&quot;,
+  &quot;code&quot;: &quot;INTERACTIVE_APPROVAL_JSON&quot;
+}</code></pre>
+<h2 id="exit-handling">Exit Handling</h2>
+<ul><li><code>0</code>: erfolgreich</li><li>ungleich <code>0</code>: Fehler oder blockierte Operation</li></ul>
+        </article>
+      </main>
+      <aside class="right">
+        <div class="toc-title">On This Page</div>
+        <nav class="toc"><a href="#regeln-fuer-automation">Regeln fuer Automation</a>
+<a href="#bash">Bash</a>
+<a href="#powershell">PowerShell</a>
+<a href="#json-fehlerbeispiel">JSON Fehlerbeispiel</a>
+<a href="#exit-handling">Exit Handling</a></nav>
+      </aside>
+    </div>
+    <script src="../assets/docs.js"></script>
+  </body>
+</html>

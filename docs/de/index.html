@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Einstieg | Agent CLI Docs</title>
+    <link rel="stylesheet" href="../assets/docs.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent CLI Docs</div>
+        <p class="hint">Minimal + professional terminal agent</p>
+        <nav class="nav"><a class="active" href="./index.html">Einstieg</a>
+<a class="" href="./api-examples.html">Skripte</a>
+<a class="" href="./config-reference.html">Konfiguration</a></nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1 class="title">Einstieg</h1>
+            <p class="subtitle">Dokumentation im modernen Layout fuer CLI-Workflows.</p>
+          </div>
+          <div class="controls">
+            <button id="nav-toggle" class="mobile-toggle">Menu</button>
+            <button id="theme-toggle">Toggle Theme</button>
+            <select id="lang-switch" class="lang-select" aria-label="Select language">
+              <option value="../index.html">🇺🇸 English</option>
+<option value="./index.html" selected>🇩🇪 Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <article class="article">
+<h1 id="agent-cli-doku">Agent CLI Doku</h1>
+<p>Minimale, professionelle lokale Agent-CLI mit Provider-Setup, Security-Policy, Freigabe-Mechanismus und JSON-Automation.</p>
+<h2 id="ueberblick">Ueberblick</h2>
+<ul><li><code>agent.js</code> fuehrt Prompts und Tool-Calls aus.</li><li><code>agent-connect.js</code> konfiguriert Provider und Defaults.</li><li><code>agent.json</code> speichert Runtime-Defaults und Sicherheitsregeln.</li><li><code>agent.auth.json</code> speichert Provider-Credentials und Tokens.</li></ul>
+<h2 id="einrichtung">Einrichtung</h2>
+<p>Wizard starten:</p>
+<pre><code class="language-bash">node agent-connect.js</code></pre>
+<p>Direkt mit Provider:</p>
+<pre><code class="language-bash">node agent-connect.js --provider openai
+node agent-connect.js --provider moonshot
+node agent-connect.js --provider deepseek
+node agent-connect.js --provider copilot</code></pre>
+<p>Im interaktiven Terminal: Auswahl mit Up/Down + Enter.</p>
+<h2 id="erste-nutzung">Erste Nutzung</h2>
+<pre><code class="language-bash">node agent.js -m &quot;Hallo&quot;</code></pre>
+<p>Mit festem Modell:</p>
+<pre><code class="language-bash">node agent.js -m &quot;Analysiere dieses Projekt&quot; --model copilot/gpt-4o</code></pre>
+<h2 id="wichtige-modi">Wichtige Modi</h2>
+<h3 id="approval">Approval</h3>
+<ul><li><code>ask</code>: vor jedem Kommando fragen</li><li><code>auto</code>: erlaubte Kommandos direkt ausfuehren</li><li><code>never</code>: Kommandos blockieren</li></ul>
+<h3 id="tools">Tools</h3>
+<ul><li><code>auto</code>: mit Tools starten, bei Inkompatibilitaet ohne Tools wiederholen</li><li><code>on</code>: Tool-Calling immer aktiv</li><li><code>off</code>: Tool-Calling deaktiviert</li></ul>
+<p>Beispiele:</p>
+<pre><code class="language-bash">node agent.js -m &quot;wie gehts dir?&quot; --model perplexity/sonar --no-tools
+node agent.js -m &quot;repo check&quot; --approval ask --mode build</code></pre>
+<h3 id="dateien-und-bilder-anhaengen">Dateien und Bilder anhaengen</h3>
+<pre><code class="language-bash">node agent.js -m &quot;Erklaere diese Datei&quot; --file src/app.ts
+node agent.js -m &quot;Beschreibe dieses UI&quot; --model openai/gpt-4o --image screenshot.png</code></pre>
+<p>Limits:</p>
+<ul><li>Dateien: max 10, max 200KB je Datei</li><li>Bilder: max 5, max 5MB je Bild (<code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code>)</li><li>Bild + text-only Modell =&gt; <code>VISION_NOT_SUPPORTED</code></li></ul>
+<h2 id="cli-referenz">CLI Referenz</h2>
+<pre><code class="language-text">node agent.js -m &quot;message&quot; [options]
+node agent-connect.js [--provider copilot|deepseek|fireworks|groq|mistral|moonshot|openai|openrouter|perplexity|together|xai]</code></pre>
+<h2 id="fehlerbehebung">Fehlerbehebung</h2>
+<ul><li><code>PROVIDER_NOT_CONFIGURED</code>: <code>node agent-connect.js --provider &lt;name&gt;</code> ausfuehren</li><li><code>INTERACTIVE_APPROVAL_JSON</code>: bei <code>--json</code> nur <code>--approval auto|never</code> nutzen</li><li><code>INTERACTIVE_APPROVAL_TTY</code>: interaktives Terminal nutzen oder <code>--approval auto</code></li></ul>
+        </article>
+      </main>
+      <aside class="right">
+        <div class="toc-title">On This Page</div>
+        <nav class="toc"><a href="#ueberblick">Ueberblick</a>
+<a href="#einrichtung">Einrichtung</a>
+<a href="#erste-nutzung">Erste Nutzung</a>
+<a href="#wichtige-modi">Wichtige Modi</a>
+<a style="padding-left:12px" href="#approval">Approval</a>
+<a style="padding-left:12px" href="#tools">Tools</a>
+<a style="padding-left:12px" href="#dateien-und-bilder-anhaengen">Dateien und Bilder anhaengen</a>
+<a href="#cli-referenz">CLI Referenz</a>
+<a href="#fehlerbehebung">Fehlerbehebung</a></nav>
+      </aside>
+    </div>
+    <script src="../assets/docs.js"></script>
+  </body>
+</html>

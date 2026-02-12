@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scripts | Agent CLI Docs</title>
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent CLI Docs</div>
+        <p class="hint">Minimal + professional terminal agent</p>
+        <nav class="nav"><a class="" href="./index.html">Get Started</a>
+<a class="active" href="./api-examples.html">Scripts</a>
+<a class="" href="./config-reference.html">Config</a></nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1 class="title">Scripts</h1>
+            <p class="subtitle">Documentation in a modern docs layout for CLI workflows.</p>
+          </div>
+          <div class="controls">
+            <button id="nav-toggle" class="mobile-toggle">Menu</button>
+            <button id="theme-toggle">Toggle Theme</button>
+            <select id="lang-switch" class="lang-select" aria-label="Select language">
+              <option value="./api-examples.html" selected>🇺🇸 English</option>
+<option value="./de/api-examples.html">🇩🇪 Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <article class="article">
+<h1 id="script-and-ci-examples">Script and CI Examples</h1>
+<p>Use these examples for automation with stable JSON output.</p>
+<h2 id="rules-for-automation">Rules for Automation</h2>
+<ul><li>Always use <code>--json</code>.</li><li>Use <code>--approval auto</code> or <code>--approval never</code>.</li><li>Do not use <code>--approval ask</code> in automation.</li></ul>
+<h2 id="bash">Bash</h2>
+<pre><code class="language-bash">set -euo pipefail
+
+OUT=$(node agent.js -m &quot;Run tests and summarize&quot; --json --approval auto --mode build)
+echo &quot;$OUT&quot;</code></pre>
+<p>Attach a file:</p>
+<pre><code class="language-bash">OUT=$(node agent.js -m &quot;Review this file&quot; --file src/app.ts --json --approval auto --tools off)
+echo &quot;$OUT&quot;</code></pre>
+<h2 id="powershell">PowerShell</h2>
+<pre><code class="language-powershell">$out = node agent.js -m &quot;Run tests and summarize&quot; --json --approval auto --mode build
+$obj = $out | ConvertFrom-Json
+$obj.message</code></pre>
+<h2 id="nodejs-child-process">Node.js Child Process</h2>
+<pre><code class="language-js">const { execFileSync } = require(&quot;node:child_process&quot;);
+
+const raw = execFileSync(&quot;node&quot;, [
+  &quot;agent.js&quot;,
+  &quot;-m&quot;,
+  &quot;Run lint and summarize&quot;,
+  &quot;--json&quot;,
+  &quot;--approval&quot;,
+  &quot;auto&quot;,
+  &quot;--mode&quot;,
+  &quot;build&quot;,
+], { encoding: &quot;utf8&quot; });
+
+const result = JSON.parse(raw);
+console.log(result.ok, result.message);</code></pre>
+<h2 id="json-output-contract">JSON Output Contract</h2>
+<p>Success example:</p>
+<pre><code class="language-json">{
+  &quot;ok&quot;: true,
+  &quot;provider&quot;: &quot;copilot&quot;,
+  &quot;model&quot;: &quot;copilot/gpt-4o&quot;,
+  &quot;mode&quot;: &quot;build&quot;,
+  &quot;approvalMode&quot;: &quot;auto&quot;,
+  &quot;toolsMode&quot;: &quot;auto&quot;,
+  &quot;message&quot;: &quot;Summary...&quot;,
+  &quot;toolCalls&quot;: [],
+  &quot;timingMs&quot;: 320
+}</code></pre>
+<p>Error example:</p>
+<pre><code class="language-json">{
+  &quot;ok&quot;: false,
+  &quot;error&quot;: &quot;Interactive approval is not supported with --json. Use --approval auto or --approval never.&quot;,
+  &quot;code&quot;: &quot;INTERACTIVE_APPROVAL_JSON&quot;
+}</code></pre>
+<pre><code class="language-json">{
+  &quot;ok&quot;: false,
+  &quot;error&quot;: &quot;Model &#39;perplexity/sonar&#39; is likely text-only. Image attachments require a vision-capable model.&quot;,
+  &quot;code&quot;: &quot;VISION_NOT_SUPPORTED&quot;
+}</code></pre>
+<h2 id="exit-handling">Exit Handling</h2>
+<ul><li><code>0</code>: successful execution</li><li>non-zero: error or blocked operation</li></ul>
+<p>Always parse <code>ok</code> and <code>code</code> for deterministic automation behavior.</p>
+        </article>
+      </main>
+      <aside class="right">
+        <div class="toc-title">On This Page</div>
+        <nav class="toc"><a href="#rules-for-automation">Rules for Automation</a>
+<a href="#bash">Bash</a>
+<a href="#powershell">PowerShell</a>
+<a href="#nodejs-child-process">Node.js Child Process</a>
+<a href="#json-output-contract">JSON Output Contract</a>
+<a href="#exit-handling">Exit Handling</a></nav>
+      </aside>
+    </div>
+    <script src="./assets/docs.js"></script>
+  </body>
+</html>
