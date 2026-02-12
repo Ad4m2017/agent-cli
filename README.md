@@ -35,6 +35,11 @@ In interactive terminals, the setup wizard supports Up/Down + Enter menus.
 
 ## Documentation
 
+Live docs:
+
+- EN: https://ad4m2017.github.io/agent-cli/
+- DE: https://ad4m2017.github.io/agent-cli/de/
+
 Build docs from markdown sources:
 
 ```bash
@@ -117,3 +122,7 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Version
 
 Current version: `0.3.0`
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
