@@ -1,5 +1,7 @@
 # agent-cli
 
+[![CI](https://github.com/Ad4m2017/agent-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Ad4m2017/agent-cli/actions/workflows/ci.yml)
+
 Ein Zero-Dependency, Multi-Provider KI-Agent fuer das Terminal. Fuehrt Prompts aus, steuert Shell-Befehle und setzt Sicherheitsrichtlinien durch -- alles von der Kommandozeile, ohne Frameworks, Server oder Datenbanken.
 
 ## Warum agent-cli?

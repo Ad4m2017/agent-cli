@@ -1,5 +1,7 @@
 # agent-cli
 
+[![CI](https://github.com/Ad4m2017/agent-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/Ad4m2017/agent-cli/actions/workflows/ci.yml)
+
 A zero-dependency, multi-provider AI agent for the terminal. Runs prompts, executes shell commands, and enforces security policies -- all from the command line, without frameworks, servers, or databases.
 
 ## Why agent-cli?

@@ -4,6 +4,25 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [0.4.0] - 2026-02-13
+
+### Added
+- `package.json` — project manifest with bin entries, test script, engines >=18.0.0 (zero runtime dependencies preserved)
+- `.editorconfig` — consistent formatting across editors (UTF-8, 2-space indent, LF)
+- `ERROR_CODES` constant objects in both `agent.js` (16 codes) and `agent-connect.js` (14 codes), replacing scattered hardcoded strings
+- `module.exports` for pure functions in both main files (23 from agent.js, 7 from agent-connect.js)
+- `require.main === module` guard in both files — CLI behavior unchanged when run directly, functions importable for testing
+- 147 unit tests using `node:test` (`test/agent.test.js` with 114 tests, `test/agent-connect.test.js` with 33 tests)
+- GitHub Actions CI workflow for automated test runs on push and PR
+
+### Changed
+- Version bumped from 0.3.1 to 0.4.0 across all three locations (agent.js, agent-connect.js, package.json)
+- Error messages in both files now reference centralized `ERROR_CODES` constants instead of inline strings
+
+### Improved
+- Documentation (README.md, README.de.md) rewritten with USPs, architecture diagrams, concept explanations, and troubleshooting tables
+- All docs pages (get-started, config-reference, api-examples) expanded and maintained in both EN and DE
+
 ## [0.3.1] - 2026-02-13
 
 ### Added
