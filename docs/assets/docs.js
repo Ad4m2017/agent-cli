@@ -50,11 +50,20 @@
   // Mobile Navigation
   const navBtn = document.getElementById('nav-toggle');
   const sidebar = document.querySelector('.sidebar');
+  const closeBtn = document.querySelector('.sidebar-close');
 
   if (navBtn) {
     navBtn.addEventListener('click', function () {
       const isOpen = document.body.classList.toggle('nav-open');
       navBtn.setAttribute('aria-expanded', String(isOpen));
+    });
+  }
+
+  // Close button functionality
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function () {
+      document.body.classList.remove('nav-open');
+      if (navBtn) navBtn.setAttribute('aria-expanded', 'false');
     });
   }
 

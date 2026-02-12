@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "0.3.0";
+const CONNECT_VERSION = "0.3.1";
 
 const PROVIDER_CATALOG = {
   copilot: { type: "oauth", label: "GitHub Copilot" },

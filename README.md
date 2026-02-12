@@ -281,7 +281,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `0.3.0` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `0.3.1` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
