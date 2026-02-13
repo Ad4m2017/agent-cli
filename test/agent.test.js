@@ -10,7 +10,10 @@ const path = require("node:path");
 const {
   ERROR_CODES,
   fetchWithTimeout,
+  parseRetryAfter,
+  fetchWithRetry,
   parseCliArgs,
+  applyEnvOverrides,
   defaultAgentConfig,
   splitProviderModel,
   resolveModelSelection,
@@ -58,6 +61,7 @@ describe("ERROR_CODES", () => {
       "TOOLS_NOT_SUPPORTED",
       "RUNTIME_ERROR",
       "FETCH_TIMEOUT",
+      "RETRY_EXHAUSTED",
     ];
     for (const code of expected) {
       assert.equal(ERROR_CODES[code], code);
@@ -865,6 +869,300 @@ describe("fetchWithTimeout", () => {
       assert.equal(res.status, 200);
     } finally {
       globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseRetryAfter
+// ---------------------------------------------------------------------------
+describe("parseRetryAfter", () => {
+  it("parses delta-seconds string", () => {
+    assert.equal(parseRetryAfter("5"), 5000);
+  });
+
+  it("parses zero seconds", () => {
+    assert.equal(parseRetryAfter("0"), 0);
+  });
+
+  it("caps at maxDelayMs", () => {
+    assert.equal(parseRetryAfter("120", 10000), 10000);
+  });
+
+  it("caps at default 30s when no maxDelayMs given", () => {
+    assert.equal(parseRetryAfter("60"), 30000);
+  });
+
+  it("parses HTTP-date string", () => {
+    const futureDate = new Date(Date.now() + 10000).toUTCString();
+    const result = parseRetryAfter(futureDate);
+    // Allow some tolerance for test execution time
+    assert.ok(result > 8000 && result <= 30000, `Expected ~10000ms, got ${result}`);
+  });
+
+  it("returns 0 for past HTTP-date", () => {
+    const pastDate = new Date(Date.now() - 5000).toUTCString();
+    assert.equal(parseRetryAfter(pastDate), 0);
+  });
+
+  it("returns null for null/undefined/empty", () => {
+    assert.equal(parseRetryAfter(null), null);
+    assert.equal(parseRetryAfter(undefined), null);
+    assert.equal(parseRetryAfter(""), null);
+    assert.equal(parseRetryAfter("  "), null);
+  });
+
+  it("returns null for unparseable string", () => {
+    assert.equal(parseRetryAfter("not-a-number-or-date"), null);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchWithRetry
+// ---------------------------------------------------------------------------
+describe("fetchWithRetry", () => {
+  it("returns response on first success (no retry)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.resolve({ ok: true, status: 200 });
+    try {
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      assert.equal(res.ok, true);
+      assert.equal(res.status, 200);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("retries on 503 and succeeds on second attempt", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalStderrWrite = process.stderr.write;
+    let callCount = 0;
+    let stderrOutput = "";
+    process.stderr.write = (msg) => { stderrOutput += msg; };
+    globalThis.fetch = () => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({ ok: false, status: 503, headers: new Map() });
+      }
+      return Promise.resolve({ ok: true, status: 200 });
+    };
+    try {
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      assert.equal(res.ok, true);
+      assert.equal(callCount, 2);
+      assert.ok(stderrOutput.includes("Retry 1/3"), "Should log retry to stderr");
+      assert.ok(stderrOutput.includes("HTTP 503"), "Should mention status code");
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.stderr.write = originalStderrWrite;
+    }
+  });
+
+  it("retries on 429 with Retry-After header", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalStderrWrite = process.stderr.write;
+    let callCount = 0;
+    let loggedDelay = "";
+    process.stderr.write = (msg) => { loggedDelay += msg; };
+    globalThis.fetch = () => {
+      callCount++;
+      if (callCount === 1) {
+        const headers = new Map();
+        headers.set("retry-after", "0");
+        return Promise.resolve({ ok: false, status: 429, headers });
+      }
+      return Promise.resolve({ ok: true, status: 200 });
+    };
+    try {
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      assert.equal(res.ok, true);
+      assert.equal(callCount, 2);
+      assert.ok(loggedDelay.includes("429"), "Should mention 429 in retry log");
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.stderr.write = originalStderrWrite;
+    }
+  });
+
+  it("returns last response after maxRetries exhausted on 500", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalStderrWrite = process.stderr.write;
+    process.stderr.write = () => {};
+    globalThis.fetch = () => Promise.resolve({ ok: false, status: 500, headers: new Map() });
+    try {
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 2, baseDelayMs: 1 });
+      assert.equal(res.ok, false);
+      assert.equal(res.status, 500);
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.stderr.write = originalStderrWrite;
+    }
+  });
+
+  it("does not retry on 400 (non-retryable)", async () => {
+    const originalFetch = globalThis.fetch;
+    let callCount = 0;
+    globalThis.fetch = () => {
+      callCount++;
+      return Promise.resolve({ ok: false, status: 400, headers: new Map() });
+    };
+    try {
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      assert.equal(res.status, 400);
+      assert.equal(callCount, 1, "Should NOT retry on 400");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("does not retry on 401 (non-retryable)", async () => {
+    const originalFetch = globalThis.fetch;
+    let callCount = 0;
+    globalThis.fetch = () => {
+      callCount++;
+      return Promise.resolve({ ok: false, status: 401, headers: new Map() });
+    };
+    try {
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      assert.equal(res.status, 401);
+      assert.equal(callCount, 1, "Should NOT retry on 401");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("retries on FETCH_TIMEOUT and throws RETRY_EXHAUSTED after maxRetries", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalStderrWrite = process.stderr.write;
+    process.stderr.write = () => {};
+    globalThis.fetch = (url, opts) => {
+      // Simulate timeout by listening for abort signal
+      return new Promise((resolve, reject) => {
+        if (opts && opts.signal) {
+          opts.signal.addEventListener("abort", () => {
+            const err = new Error("The operation was aborted");
+            err.name = "AbortError";
+            reject(err);
+          });
+        }
+      });
+    };
+    try {
+      await assert.rejects(
+        () => fetchWithRetry("http://localhost/test", {}, 50, { maxRetries: 1, baseDelayMs: 1 }),
+        (err) => {
+          assert.equal(err.code, "RETRY_EXHAUSTED");
+          assert.ok(err.message.includes("retries failed"));
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+      process.stderr.write = originalStderrWrite;
+    }
+  });
+
+  it("throws immediately on non-retryable fetch error (e.g. DNS)", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new TypeError("fetch failed: DNS resolution failed"));
+    try {
+      await assert.rejects(
+        () => fetchWithRetry("http://nonexistent.invalid/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 }),
+        (err) => {
+          assert.equal(err.name, "TypeError");
+          assert.ok(err.message.includes("DNS resolution failed"));
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyEnvOverrides
+// ---------------------------------------------------------------------------
+describe("applyEnvOverrides", () => {
+  it("does not mutate the original opts object", () => {
+    const original = { model: "", mode: "", approval: "" };
+    const saved = Object.assign({}, original);
+    // Ensure env vars are clean
+    delete process.env.AGENT_MODEL;
+    delete process.env.AGENT_MODE;
+    delete process.env.AGENT_APPROVAL;
+    applyEnvOverrides(original);
+    assert.deepStrictEqual(original, saved);
+  });
+
+  it("applies AGENT_MODEL when opts.model is empty", () => {
+    const originalModel = process.env.AGENT_MODEL;
+    try {
+      process.env.AGENT_MODEL = "openai/gpt-4.1";
+      const result = applyEnvOverrides({ model: "" });
+      assert.equal(result.model, "openai/gpt-4.1");
+    } finally {
+      if (originalModel === undefined) delete process.env.AGENT_MODEL;
+      else process.env.AGENT_MODEL = originalModel;
+    }
+  });
+
+  it("CLI flag takes priority over AGENT_MODEL", () => {
+    const originalModel = process.env.AGENT_MODEL;
+    try {
+      process.env.AGENT_MODEL = "openai/gpt-4.1";
+      const result = applyEnvOverrides({ model: "copilot/gpt-4o" });
+      assert.equal(result.model, "copilot/gpt-4o");
+    } finally {
+      if (originalModel === undefined) delete process.env.AGENT_MODEL;
+      else process.env.AGENT_MODEL = originalModel;
+    }
+  });
+
+  it("applies AGENT_MODE when opts.mode is empty", () => {
+    const originalMode = process.env.AGENT_MODE;
+    try {
+      process.env.AGENT_MODE = "plan";
+      const result = applyEnvOverrides({ mode: "" });
+      assert.equal(result.mode, "plan");
+    } finally {
+      if (originalMode === undefined) delete process.env.AGENT_MODE;
+      else process.env.AGENT_MODE = originalMode;
+    }
+  });
+
+  it("applies AGENT_APPROVAL when opts.approval is empty", () => {
+    const originalApproval = process.env.AGENT_APPROVAL;
+    try {
+      process.env.AGENT_APPROVAL = "auto";
+      const result = applyEnvOverrides({ approval: "" });
+      assert.equal(result.approval, "auto");
+    } finally {
+      if (originalApproval === undefined) delete process.env.AGENT_APPROVAL;
+      else process.env.AGENT_APPROVAL = originalApproval;
+    }
+  });
+
+  it("returns unchanged opts when no env vars are set", () => {
+    const originalModel = process.env.AGENT_MODEL;
+    const originalMode = process.env.AGENT_MODE;
+    const originalApproval = process.env.AGENT_APPROVAL;
+    try {
+      delete process.env.AGENT_MODEL;
+      delete process.env.AGENT_MODE;
+      delete process.env.AGENT_APPROVAL;
+      const result = applyEnvOverrides({ model: "", mode: "", approval: "", message: "test" });
+      assert.equal(result.model, "");
+      assert.equal(result.mode, "");
+      assert.equal(result.approval, "");
+      assert.equal(result.message, "test");
+    } finally {
+      if (originalModel === undefined) delete process.env.AGENT_MODEL;
+      else process.env.AGENT_MODEL = originalModel;
+      if (originalMode === undefined) delete process.env.AGENT_MODE;
+      else process.env.AGENT_MODE = originalMode;
+      if (originalApproval === undefined) delete process.env.AGENT_APPROVAL;
+      else process.env.AGENT_APPROVAL = originalApproval;
     }
   });
 });

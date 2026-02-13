@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.5.0";
+const AGENT_VERSION = "0.6.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -51,6 +51,7 @@ const ERROR_CODES = {
   TOOLS_NOT_SUPPORTED: "TOOLS_NOT_SUPPORTED",
   RUNTIME_ERROR: "RUNTIME_ERROR",
   FETCH_TIMEOUT: "FETCH_TIMEOUT",
+  RETRY_EXHAUSTED: "RETRY_EXHAUSTED",
 };
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30000;
@@ -76,6 +77,121 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Default retry options for fetchWithRetry. */
+const DEFAULT_RETRY_OPTS = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 30000,
+  retryableStatuses: [500, 502, 503],
+};
+
+/**
+ * Parse the Retry-After HTTP header into milliseconds.
+ * Supports both delta-seconds ("120") and HTTP-date formats.
+ * Returns null when the header is missing or unparseable.
+ * Result is capped at maxDelayMs (default 30 000 ms).
+ */
+function parseRetryAfter(headerValue, maxDelayMs) {
+  const cap = typeof maxDelayMs === "number" && maxDelayMs > 0 ? maxDelayMs : DEFAULT_RETRY_OPTS.maxDelayMs;
+  if (headerValue == null || headerValue === "") return null;
+  const str = String(headerValue).trim();
+  if (str === "") return null;
+
+  // Try delta-seconds first (e.g. "120")
+  if (/^\d+$/.test(str)) {
+    const ms = parseInt(str, 10) * 1000;
+    return Math.min(ms, cap);
+  }
+
+  // Try HTTP-date (e.g. "Fri, 13 Feb 2026 12:00:00 GMT")
+  const dateMs = Date.parse(str);
+  if (!Number.isNaN(dateMs)) {
+    const delta = dateMs - Date.now();
+    if (delta <= 0) return 0;
+    return Math.min(delta, cap);
+  }
+
+  return null;
+}
+
+/**
+ * Fetch wrapper with automatic retry for transient errors.
+ * Builds on top of fetchWithTimeout — retries on configurable HTTP statuses
+ * (default 500/502/503), HTTP 429 (rate limit), and FETCH_TIMEOUT errors.
+ *
+ * Uses exponential backoff: baseDelayMs * 2^attempt (1s → 2s → 4s).
+ * For HTTP 429 responses the Retry-After header is respected when present.
+ *
+ * @param {string} url
+ * @param {object} options  - fetch options (method, headers, body, etc.)
+ * @param {number} [timeoutMs] - per-attempt timeout (passed to fetchWithTimeout)
+ * @param {object} [retryOpts] - { maxRetries, baseDelayMs, maxDelayMs, retryableStatuses }
+ * @returns {Promise<Response>}
+ */
+async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
+  const cfg = Object.assign({}, DEFAULT_RETRY_OPTS, retryOpts || {});
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
+    try {
+      const res = await fetchWithTimeout(url, options, timeoutMs);
+
+      // Success or non-retryable status — return immediately
+      if (res.ok) return res;
+
+      // HTTP 429 — rate limited
+      if (res.status === 429) {
+        if (attempt >= cfg.maxRetries) return res;
+        const raHeader = res.headers ? res.headers.get("retry-after") : null;
+        const raMs = parseRetryAfter(raHeader, cfg.maxDelayMs);
+        const delayMs = raMs != null ? raMs : Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
+        process.stderr.write(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP 429 rate limited)\n`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+
+      // Retryable server error (500/502/503)
+      if (cfg.retryableStatuses.indexOf(res.status) !== -1) {
+        if (attempt >= cfg.maxRetries) return res;
+        const delayMs = Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
+        process.stderr.write(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP ${res.status})\n`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+
+      // Non-retryable HTTP error (4xx etc.) — return as-is
+      return res;
+    } catch (err) {
+      lastError = err;
+
+      // Retry on timeout errors
+      if (err && err.code === ERROR_CODES.FETCH_TIMEOUT) {
+        if (attempt >= cfg.maxRetries) break;
+        const delayMs = Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
+        process.stderr.write(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (timeout)\n`);
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+
+      // Non-retryable fetch error (network down, DNS, etc.)
+      throw err;
+    }
+  }
+
+  // All retries exhausted — throw coded error
+  if (lastError) {
+    const e = new Error(`All ${cfg.maxRetries} retries failed for ${url}: ${lastError.message}`);
+    e.code = ERROR_CODES.RETRY_EXHAUSTED;
+    e.cause = lastError;
+    throw e;
+  }
+
+  // Should never reach here, but safety net
+  const e = new Error(`All ${cfg.maxRetries} retries failed for ${url}`);
+  e.code = ERROR_CODES.RETRY_EXHAUSTED;
+  throw e;
 }
 
 /**
@@ -1093,7 +1209,19 @@ async function createProviderRuntime(config, selection) {
   const providerName = selection.provider;
   const entry = getProviderEntry(config, providerName);
 
+  // When no auth config entry exists but AGENT_API_KEY is set,
+  // allow env-only runtime creation (useful for CI/CD without agent.auth.json).
   if (!entry) {
+    const envApiKey = process.env.AGENT_API_KEY || "";
+    if (envApiKey) {
+      return {
+        apiKey: envApiKey,
+        baseURL: "https://api.openai.com/v1",
+        defaultHeaders: {},
+        model: selection.model,
+        provider: providerName,
+      };
+    }
     const e = new Error(
       `Provider '${providerName}' is not configured. Setup: node agent-connect.js --provider ${providerName}`
     );
@@ -1104,9 +1232,10 @@ async function createProviderRuntime(config, selection) {
   const kind = entry.kind || "openai_compatible";
 
   if (kind === "openai_compatible") {
-    const apiKey = entry.apiKey || "";
+    const envApiKey = process.env.AGENT_API_KEY || "";
+    const apiKey = envApiKey || entry.apiKey || "";
     if (!apiKey) {
-      throw new Error(`Provider '${providerName}' is missing apiKey.`);
+      throw new Error(`Provider '${providerName}' is missing apiKey. Set AGENT_API_KEY env var or configure via agent-connect.js.`);
     }
 
     const baseURL = entry.baseUrl || undefined;
@@ -1135,11 +1264,11 @@ async function createProviderRuntime(config, selection) {
 
 /**
  * Send OpenAI-compatible /chat/completions request via fetch.
- * This avoids requiring an SDK dependency at runtime.
+ * Uses fetchWithRetry for automatic retry on transient server errors and rate limits.
  */
 async function createChatCompletion(runtime, payload) {
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
-  const res = await fetchWithTimeout(`${base}/chat/completions`, {
+  const res = await fetchWithRetry(`${base}/chat/completions`, {
     method: "POST",
     headers: Object.assign(
       {
@@ -1172,9 +1301,34 @@ async function createChatCompletion(runtime, payload) {
  * - execute tool calls
  * - continue until final assistant answer or maxTurns reached
  */
+/**
+ * Apply environment variable overrides to CLI opts.
+ * Priority: CLI flag > env var > config file > hardcoded default.
+ *
+ * Supported environment variables:
+ *   AGENT_MODEL    - provider/model (e.g. "openai/gpt-4.1")
+ *   AGENT_API_KEY  - API key (overrides agent.auth.json)
+ *   AGENT_MODE     - security mode: plan | build | unsafe
+ *   AGENT_APPROVAL - approval mode: ask | auto | never
+ *
+ * Returns a new opts object (does not mutate the input).
+ */
+function applyEnvOverrides(opts) {
+  const out = Object.assign({}, opts);
+  const envModel = process.env.AGENT_MODEL || "";
+  const envMode = process.env.AGENT_MODE || "";
+  const envApproval = process.env.AGENT_APPROVAL || "";
+
+  if (!out.model && envModel) out.model = envModel;
+  if (!out.mode && envMode) out.mode = envMode;
+  if (!out.approval && envApproval) out.approval = envApproval;
+
+  return out;
+}
+
 async function main() {
   const start = Date.now();
-  const opts = parseCliArgs(process.argv.slice(2));
+  const opts = applyEnvOverrides(parseCliArgs(process.argv.slice(2)));
 
   if (opts.help) {
     printHelp();
@@ -1423,7 +1577,10 @@ if (require.main === module) {
 module.exports = {
   ERROR_CODES,
   fetchWithTimeout,
+  parseRetryAfter,
+  fetchWithRetry,
   parseCliArgs,
+  applyEnvOverrides,
   defaultAgentConfig,
   splitProviderModel,
   resolveModelSelection,

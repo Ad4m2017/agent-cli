@@ -4,6 +4,31 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [0.6.0] - 2026-02-13
+
+### Added
+- **Retry with exponential backoff** for chat completion requests — automatic retry on HTTP 500/502/503 with configurable max retries (default 3) and backoff delays (1s → 2s → 4s, capped at 30s)
+- **HTTP 429 rate limit handling** — respects `Retry-After` header (delta-seconds and HTTP-date formats), falls back to exponential backoff when header is absent
+- **`FETCH_TIMEOUT` retry** — timeout errors during chat completion now trigger retries instead of immediate failure
+- `parseRetryAfter()` pure helper — parses `Retry-After` header into milliseconds with configurable cap
+- `fetchWithRetry()` wrapper — builds on top of `fetchWithTimeout`, used only for the chat completion call; OAuth/token calls remain single-attempt
+- `RETRY_EXHAUSTED` error code — thrown when all retry attempts fail
+- **Environment variable overrides** for CI/CD pipelines:
+  - `AGENT_MODEL` — override default model (e.g. `openai/gpt-4.1`)
+  - `AGENT_API_KEY` — override API key (allows running without `agent.auth.json`)
+  - `AGENT_MODE` — override security mode (`plan`/`build`/`unsafe`)
+  - `AGENT_APPROVAL` — override approval mode (`ask`/`auto`/`never`)
+- `applyEnvOverrides()` pure function — applies env vars to CLI opts with correct priority: CLI flag > env var > config file > default
+- **Env-only runtime creation** — when `AGENT_API_KEY` is set but no provider entry exists in `agent.auth.json`, the runtime is created from env vars alone (enables CI/CD without config files)
+- 22 new unit tests: `parseRetryAfter` (8), `fetchWithRetry` (8), `applyEnvOverrides` (6)
+
+### Changed
+- `createChatCompletion()` now uses `fetchWithRetry` instead of `fetchWithTimeout` — transparent retry on transient failures, zero performance impact in the happy path
+- Retry progress logged to stderr (`Retry 1/3 after 1000ms (HTTP 503)`)
+- Version bumped from 0.5.0 to 0.6.0 across all three locations (agent.js, agent-connect.js, package.json)
+- Test count increased from 153 to 175
+- 3 new exported functions: `parseRetryAfter`, `fetchWithRetry`, `applyEnvOverrides` (total: 27 from agent.js)
+
 ## [0.5.0] - 2026-02-13
 
 ### Added

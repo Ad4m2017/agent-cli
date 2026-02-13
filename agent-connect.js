@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "0.5.0";
+const CONNECT_VERSION = "0.6.0";
 
 /**
  * Centralized error codes.
