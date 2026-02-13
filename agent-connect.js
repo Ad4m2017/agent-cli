@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "0.4.0";
+const CONNECT_VERSION = "0.5.0";
 
 /**
  * Centralized error codes.
@@ -33,7 +33,32 @@ const ERROR_CODES = {
   COPILOT_RUNTIME_TOKEN_FAILED: "COPILOT_RUNTIME_TOKEN_FAILED",
   COPILOT_RUNTIME_TOKEN_MISSING: "COPILOT_RUNTIME_TOKEN_MISSING",
   CONNECT_ERROR: "CONNECT_ERROR",
+  FETCH_TIMEOUT: "FETCH_TIMEOUT",
 };
+
+const DEFAULT_FETCH_TIMEOUT_MS = 30000;
+
+/**
+ * Fetch wrapper with AbortController-based timeout.
+ * Throws a coded FETCH_TIMEOUT error when the request exceeds timeoutMs.
+ */
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const ms = timeoutMs || DEFAULT_FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      const e = new Error(`Request timed out after ${ms}ms: ${url}`);
+      e.code = ERROR_CODES.FETCH_TIMEOUT;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 const PROVIDER_CATALOG = {
   copilot: { type: "oauth", label: "GitHub Copilot" },
@@ -278,7 +303,15 @@ function loadConfig() {
   }
 
   const raw = fs.readFileSync(AUTH_CONFIG_FILE, "utf8");
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    throw makeError(
+      ERROR_CODES.AUTH_CONFIG_INVALID,
+      `agent.auth.json contains invalid JSON: ${parseErr.message}`
+    );
+  }
   if (!parsed || typeof parsed !== "object") {
     throw makeError(
       ERROR_CODES.AUTH_CONFIG_INVALID,
@@ -367,7 +400,12 @@ function loadAgentConfig() {
   if (!fs.existsSync(AGENT_CONFIG_FILE)) return defaults;
 
   const raw = fs.readFileSync(AGENT_CONFIG_FILE, "utf8");
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    throw makeError(ERROR_CODES.AGENT_CONFIG_INVALID, `agent.json contains invalid JSON: ${parseErr.message}`);
+  }
   if (!parsed || typeof parsed !== "object") {
     throw makeError(ERROR_CODES.AGENT_CONFIG_INVALID, "agent.json is invalid (JSON format). Please check the file.");
   }
@@ -514,7 +552,7 @@ async function requestDeviceCode(defaults) {
     scope: defaults.oauth.scope,
   });
 
-  const res = await fetch(defaults.oauth.deviceCodeUrl, {
+  const res = await fetchWithTimeout(defaults.oauth.deviceCodeUrl, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -551,7 +589,7 @@ async function pollDeviceToken(defaults, deviceCodeData) {
       grant_type: "urn:ietf:params:oauth:grant-type:device_code",
     });
 
-    const res = await fetch(defaults.oauth.accessTokenUrl, {
+    const res = await fetchWithTimeout(defaults.oauth.accessTokenUrl, {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -585,7 +623,7 @@ async function pollDeviceToken(defaults, deviceCodeData) {
 
 /** Exchange GitHub access token for Copilot runtime token. */
 async function fetchCopilotToken(defaults, githubAccessToken) {
-  const res = await fetch(defaults.api.copilotTokenUrl, {
+  const res = await fetchWithTimeout(defaults.api.copilotTokenUrl, {
     method: "GET",
     headers: {
       Accept: "application/json",
@@ -788,6 +826,14 @@ async function main() {
 
 /** Top-level error boundary for readable CLI failures. */
 if (require.main === module) {
+  /** Graceful shutdown on SIGINT (Ctrl+C) and SIGTERM. */
+  function handleSignal(signal) {
+    process.stderr.write(`\nReceived ${signal}, exiting.\n`);
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  }
+  process.on("SIGINT", () => handleSignal("SIGINT"));
+  process.on("SIGTERM", () => handleSignal("SIGTERM"));
+
   main().catch((err) => {
     const msg = err && err.message ? err.message : String(err);
     const code = err && err.code ? err.code : ERROR_CODES.CONNECT_ERROR;
@@ -798,6 +844,7 @@ if (require.main === module) {
 
 module.exports = {
   ERROR_CODES,
+  fetchWithTimeout,
   makeError,
   getProviderMenuOptions,
   getModelMenuOptions,

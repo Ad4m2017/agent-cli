@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.4.0";
+const AGENT_VERSION = "0.5.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -50,7 +50,33 @@ const ERROR_CODES = {
   INTERACTIVE_APPROVAL_TTY: "INTERACTIVE_APPROVAL_TTY",
   TOOLS_NOT_SUPPORTED: "TOOLS_NOT_SUPPORTED",
   RUNTIME_ERROR: "RUNTIME_ERROR",
+  FETCH_TIMEOUT: "FETCH_TIMEOUT",
 };
+
+const DEFAULT_FETCH_TIMEOUT_MS = 30000;
+const CHAT_FETCH_TIMEOUT_MS = 120000;
+
+/**
+ * Fetch wrapper with AbortController-based timeout.
+ * Throws a coded FETCH_TIMEOUT error when the request exceeds timeoutMs.
+ */
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const ms = timeoutMs || DEFAULT_FETCH_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      const e = new Error(`Request timed out after ${ms}ms: ${url}`);
+      e.code = ERROR_CODES.FETCH_TIMEOUT;
+      throw e;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Parse CLI arguments into a simple options object.
@@ -297,7 +323,14 @@ function loadAgentConfig() {
   if (!fs.existsSync(AGENT_CONFIG_FILE)) return defaults;
 
   const raw = fs.readFileSync(AGENT_CONFIG_FILE, "utf8");
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    const e = new Error(`agent.json contains invalid JSON: ${parseErr.message}`);
+    e.code = ERROR_CODES.AGENT_CONFIG_INVALID;
+    throw e;
+  }
   if (!parsed || typeof parsed !== "object") {
     const e = new Error("agent.json is invalid (JSON format). Please check or recreate the file.");
     e.code = ERROR_CODES.AGENT_CONFIG_INVALID;
@@ -323,7 +356,14 @@ function loadProviderConfig() {
   if (!fs.existsSync(AUTH_CONFIG_FILE)) return null;
 
   const raw = fs.readFileSync(AUTH_CONFIG_FILE, "utf8");
-  const parsed = JSON.parse(raw);
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    const e = new Error(`agent.auth.json contains invalid JSON: ${parseErr.message}`);
+    e.code = ERROR_CODES.AUTH_CONFIG_INVALID;
+    throw e;
+  }
   if (!parsed || typeof parsed !== "object") {
     const e = new Error("agent.auth.json is invalid (JSON format). Re-run setup: node agent-connect.js");
     e.code = ERROR_CODES.AUTH_CONFIG_INVALID;
@@ -695,10 +735,10 @@ function modelLikelySupportsVision(selection) {
 function isVisionUnsupportedError(err) {
   const msg = err && err.message ? String(err.message).toLowerCase() : "";
   return (
-    msg.includes("vision") ||
-    msg.includes("image") && msg.includes("not supported") ||
+    (msg.includes("vision") && msg.includes("not supported")) ||
+    (msg.includes("image") && msg.includes("not supported")) ||
     msg.includes("does not support image") ||
-    msg.includes("content type") && msg.includes("image")
+    (msg.includes("content type") && msg.includes("image"))
   );
 }
 
@@ -933,7 +973,7 @@ async function refreshGithubToken(adapter, entry) {
     refresh_token: entry.githubRefreshToken,
   });
 
-  const res = await fetch(adapter.oauth.accessTokenUrl, {
+  const res = await fetchWithTimeout(adapter.oauth.accessTokenUrl, {
     method: "POST",
     headers: {
       Accept: "application/json",
@@ -964,7 +1004,7 @@ async function fetchCopilotSessionToken(adapter, entry) {
     throw new Error("Missing GitHub access token for Copilot.");
   }
 
-  const res = await fetch(adapter.api.copilotTokenUrl, {
+  const res = await fetchWithTimeout(adapter.api.copilotTokenUrl, {
     method: "GET",
     headers: Object.assign(
       {
@@ -1099,7 +1139,7 @@ async function createProviderRuntime(config, selection) {
  */
 async function createChatCompletion(runtime, payload) {
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
-  const res = await fetch(`${base}/chat/completions`, {
+  const res = await fetchWithTimeout(`${base}/chat/completions`, {
     method: "POST",
     headers: Object.assign(
       {
@@ -1109,7 +1149,7 @@ async function createChatCompletion(runtime, payload) {
       runtime.defaultHeaders || {}
     ),
     body: JSON.stringify(payload),
-  });
+  }, CHAT_FETCH_TIMEOUT_MS);
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -1322,6 +1362,12 @@ async function main() {
     }
   }
 
+  if (!finalText && toolCalls.length > 0) {
+    process.stderr.write(
+      `Warning: Maximum tool-call turns (${maxTurns}) reached without a final answer.\n`
+    );
+  }
+
   const payload = {
     ok: true,
     provider: runtime.provider,
@@ -1349,6 +1395,14 @@ async function main() {
 
 /** Top-level error boundary for consistent CLI error handling. */
 if (require.main === module) {
+  /** Graceful shutdown on SIGINT (Ctrl+C) and SIGTERM. */
+  function handleSignal(signal) {
+    process.stderr.write(`\nReceived ${signal}, exiting.\n`);
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  }
+  process.on("SIGINT", () => handleSignal("SIGINT"));
+  process.on("SIGTERM", () => handleSignal("SIGTERM"));
+
   main().catch((err) => {
     const opts = parseCliArgs(process.argv.slice(2));
     appendErrorLog(opts.log, opts.logFile, err);
@@ -1368,6 +1422,7 @@ if (require.main === module) {
 
 module.exports = {
   ERROR_CODES,
+  fetchWithTimeout,
   parseCliArgs,
   defaultAgentConfig,
   splitProviderModel,

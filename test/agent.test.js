@@ -9,6 +9,7 @@ const path = require("node:path");
 
 const {
   ERROR_CODES,
+  fetchWithTimeout,
   parseCliArgs,
   defaultAgentConfig,
   splitProviderModel,
@@ -56,6 +57,7 @@ describe("ERROR_CODES", () => {
       "INTERACTIVE_APPROVAL_TTY",
       "TOOLS_NOT_SUPPORTED",
       "RUNTIME_ERROR",
+      "FETCH_TIMEOUT",
     ];
     for (const code of expected) {
       assert.equal(ERROR_CODES[code], code);
@@ -544,6 +546,14 @@ describe("isVisionUnsupportedError", () => {
   it("detects vision-related errors", () => {
     assert.equal(isVisionUnsupportedError({ message: "vision is not supported for this model" }), true);
     assert.equal(isVisionUnsupportedError({ message: "does not support image input" }), true);
+    assert.equal(isVisionUnsupportedError({ message: "image is not supported by this model" }), true);
+    assert.equal(isVisionUnsupportedError({ message: "content type image/png not accepted" }), true);
+  });
+
+  it("does NOT false-positive on 'vision' without 'not supported'", () => {
+    assert.equal(isVisionUnsupportedError({ message: "revision not found" }), false);
+    assert.equal(isVisionUnsupportedError({ message: "the vision model is ready" }), false);
+    assert.equal(isVisionUnsupportedError({ message: "vision" }), false);
   });
 
   it("returns false for unrelated errors", () => {
@@ -796,5 +806,65 @@ describe("toAbsolutePath", () => {
 
   it("returns empty string for non-string input", () => {
     assert.equal(toAbsolutePath(42), "");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchWithTimeout
+// ---------------------------------------------------------------------------
+describe("fetchWithTimeout", () => {
+  it("throws FETCH_TIMEOUT error when request exceeds timeout", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (_url, opts) => new Promise((_resolve, reject) => {
+      if (opts && opts.signal) {
+        opts.signal.addEventListener("abort", () => {
+          const err = new Error("The operation was aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      }
+    });
+    try {
+      await assert.rejects(
+        () => fetchWithTimeout("http://localhost:1/test", {}, 50),
+        (err) => {
+          assert.equal(err.code, "FETCH_TIMEOUT");
+          assert.ok(err.message.includes("timed out"));
+          assert.ok(err.message.includes("50ms"));
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("passes through non-timeout errors from fetch", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.reject(new TypeError("fetch failed: DNS resolution failed"));
+    try {
+      await assert.rejects(
+        () => fetchWithTimeout("http://nonexistent.invalid/test", {}, 5000),
+        (err) => {
+          assert.equal(err.name, "TypeError");
+          assert.ok(err.message.includes("DNS resolution failed"));
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("returns response on success", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.resolve({ ok: true, status: 200 });
+    try {
+      const res = await fetchWithTimeout("http://localhost/test", {}, 5000);
+      assert.equal(res.ok, true);
+      assert.equal(res.status, 200);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -4,6 +4,24 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [0.5.0] - 2026-02-13
+
+### Added
+- `fetchWithTimeout()` helper with `AbortController`-based timeout in both `agent.js` (30s default, 120s for chat completions) and `agent-connect.js` (30s default)
+- `FETCH_TIMEOUT` error code in both files — all 6 `fetch()` calls now have timeout protection
+- `SIGINT`/`SIGTERM` signal handlers for graceful shutdown (exit codes 130/143) in both files
+- Warning message when maximum tool-call turns (5) exhausted without final answer
+- 6 new unit tests: `fetchWithTimeout` timeout/passthrough/success (agent.js), `fetchWithTimeout` timeout/success (agent-connect.js), `isVisionUnsupportedError` false-positive regression test
+
+### Fixed
+- **Operator-precedence bug** in `isVisionUnsupportedError` — previously any error containing the word "vision" (e.g. "revision not found") was misidentified as a vision-unsupported error; now requires both "vision" and "not supported" in the message
+- **Corrupted JSON config handling** — `JSON.parse` in all 4 config loaders (`loadAgentConfig`/`loadProviderConfig` in both files) now wrapped in try/catch with clear coded error messages instead of raw `SyntaxError` stack traces
+
+### Changed
+- Version bumped from 0.4.0 to 0.5.0 across all three locations (agent.js, agent-connect.js, package.json)
+- `fetchWithTimeout` exported from both files for testability
+- Test count increased from 147 to 153
+
 ## [0.4.0] - 2026-02-13
 
 ### Added

@@ -8,6 +8,7 @@ const assert = require("node:assert/strict");
 
 const {
   ERROR_CODES,
+  fetchWithTimeout,
   makeError,
   getProviderMenuOptions,
   getModelMenuOptions,
@@ -37,6 +38,7 @@ describe("ERROR_CODES (connect)", () => {
       "COPILOT_RUNTIME_TOKEN_FAILED",
       "COPILOT_RUNTIME_TOKEN_MISSING",
       "CONNECT_ERROR",
+      "FETCH_TIMEOUT",
     ];
     for (const code of expected) {
       assert.equal(ERROR_CODES[code], code);
@@ -293,5 +295,46 @@ describe("getCopilotDefaults", () => {
     assert.ok(defaults.oauth.deviceCodeUrl.includes("github.com"));
     assert.ok(defaults.oauth.accessTokenUrl.includes("github.com"));
     assert.ok(defaults.api.copilotTokenUrl.includes("github.com"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchWithTimeout
+// ---------------------------------------------------------------------------
+describe("fetchWithTimeout (connect)", () => {
+  it("throws FETCH_TIMEOUT error when request exceeds timeout", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (_url, opts) => new Promise((_resolve, reject) => {
+      if (opts && opts.signal) {
+        opts.signal.addEventListener("abort", () => {
+          const err = new Error("The operation was aborted");
+          err.name = "AbortError";
+          reject(err);
+        });
+      }
+    });
+    try {
+      await assert.rejects(
+        () => fetchWithTimeout("http://localhost:1/test", {}, 50),
+        (err) => {
+          assert.equal(err.code, "FETCH_TIMEOUT");
+          assert.ok(err.message.includes("timed out"));
+          return true;
+        }
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("returns response on success", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = () => Promise.resolve({ ok: true, status: 200 });
+    try {
+      const res = await fetchWithTimeout("http://localhost/test", {}, 5000);
+      assert.equal(res.ok, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
