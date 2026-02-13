@@ -4,6 +4,47 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.1.0] - 2026-02-13
+
+### Added
+- Major `agent-connect.js` wizard UX upgrade with zero dependencies:
+  - provider status labels in menu (`installed`, `installed, default`, `not configured`)
+  - new top-level action menu (`Setup/reconfigure`, `Set default provider/model only`, `Exit`)
+  - quick default-switch flow without full reconfiguration
+- Local provider presets added:
+  - `ollama` (`http://localhost:11434/v1`)
+  - `lmstudio` (`http://localhost:1234/v1`)
+- Custom provider setup flow for unknown providers:
+  - normalized provider slug
+  - configurable OpenAI-compatible base URL
+  - optional API key
+- Model discovery and selection improvements:
+  - optional live `/models` discovery
+  - optional fallback to `models.dev`
+  - manual comma-separated model entry fallback
+  - persistent `enabledModels` storage per provider
+  - `Custom model...` option in default-model selection
+- New provider source option in setup menu:
+  - `Load provider from models.dev...` with provider API URL import (`api`) and model candidates
+- Large menu usability improvements:
+  - paginated windowed menu rendering
+  - jump navigation (`n`/`p` and PageDown/PageUp) by 10 entries
+  - terminal-width label truncation for long provider/model lines
+
+### Changed
+- OpenAI connect flow simplified back to API-key setup only (removed interim ChatGPT browser/headless auth mode paths)
+- Copilot setup now supports model refresh/discovery and stores `enabledModels`
+- "Set default provider/model only" flow now offers optional model refresh from live provider/models.dev before picking default
+- Runtime request auth headers in `agent.js` are only sent when token/key exists, improving compatibility with local no-key endpoints
+- Version bumped from `1.0.0` to `1.1.0` in `agent.js`, `agent-connect.js`, and `package.json`
+
+### Tests
+- Expanded connect and runtime test coverage for:
+  - menu pagination/windowing/truncation helpers
+  - models.dev provider/model mapping helpers
+  - provider status labeling and local alias normalization
+- Total tests increased to 248 (all passing)
+
 ## [1.0.0] - 2026-02-13
 
 ### Added

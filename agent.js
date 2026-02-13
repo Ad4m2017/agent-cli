@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.0.0";
+const AGENT_VERSION = "1.1.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -1179,13 +1179,14 @@ function isStreamUnsupportedError(err) {
 
 async function createChatCompletionStream(runtime, payload, logger, onText) {
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const authHeaders = runtime.apiKey ? { Authorization: `Bearer ${runtime.apiKey}` } : {};
   const res = await fetchWithRetry(`${base}/chat/completions`, {
     method: "POST",
     headers: Object.assign(
       {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${runtime.apiKey}`,
       },
+      authHeaders,
       runtime.defaultHeaders || {}
     ),
     body: JSON.stringify(Object.assign({}, payload, { stream: true })),
@@ -1644,11 +1645,11 @@ async function createProviderRuntime(config, selection, authConfigPath, opts) {
   if (kind === "openai_compatible") {
     const envApiKey = process.env.AGENT_API_KEY || "";
     const apiKey = envApiKey || entry.apiKey || "";
-    if (!apiKey) {
+    const baseURL = validateProviderBaseUrl(entry.baseUrl || "https://api.openai.com/v1", opts, providerName);
+    const isLocalHttp = baseURL.startsWith("http://") && isLocalOrPrivateHttpHost(new URL(baseURL).hostname);
+    if (!apiKey && !isLocalHttp) {
       throw new Error(`Provider '${providerName}' is missing apiKey. Set AGENT_API_KEY env var or configure via agent-connect.js.`);
     }
-
-    const baseURL = validateProviderBaseUrl(entry.baseUrl || "https://api.openai.com/v1", opts, providerName);
     return {
       apiKey,
       baseURL,
@@ -1682,13 +1683,14 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
     return createChatCompletionStream(runtime, payload, logger, onText);
   }
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const authHeaders = runtime.apiKey ? { Authorization: `Bearer ${runtime.apiKey}` } : {};
   const res = await fetchWithRetry(`${base}/chat/completions`, {
     method: "POST",
     headers: Object.assign(
       {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${runtime.apiKey}`,
       },
+      authHeaders,
       runtime.defaultHeaders || {}
     ),
     body: JSON.stringify(payload),

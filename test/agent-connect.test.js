@@ -16,6 +16,8 @@ const {
   redactSensitiveText,
   getErrorCode,
   getExitCodeForError,
+  getMenuWindow,
+  truncateForTerminal,
   getProviderMenuOptions,
   getModelMenuOptions,
   parseArgs,
@@ -23,6 +25,10 @@ const {
   validateConfigPath,
   writeJsonAtomic,
   normalizeProvider,
+  normalizeProviderSlug,
+  getModelsDevProviderKeys,
+  extractModelsFromModelsDevEntry,
+  getModelsDevProviderCandidates,
   defaultAgentConfig,
   getCopilotDefaults,
 } = require("../agent-connect.js");
@@ -112,6 +118,17 @@ describe("getProviderMenuOptions", () => {
     assert.ok(values.includes("copilot"));
     assert.ok(values.includes("openai"));
     assert.ok(values.includes("groq"));
+    assert.ok(values.includes("ollama"));
+    assert.ok(values.includes("lmstudio"));
+  });
+
+  it("marks default provider in label when config is provided", () => {
+    const providersConfig = { providers: { openai: { kind: "openai_compatible", apiKey: "x" } } };
+    const agentConfig = { runtime: { defaultProvider: "openai" } };
+    const options = getProviderMenuOptions(providersConfig, agentConfig);
+    const openai = options.find((o) => o.value === "openai");
+    assert.ok(openai);
+    assert.ok(openai.label.includes("installed, default"));
   });
 });
 
@@ -296,6 +313,70 @@ describe("normalizeProvider", () => {
     assert.equal(normalizeProvider(null), "");
     assert.equal(normalizeProvider(undefined), "");
   });
+
+  it("normalizes local provider aliases", () => {
+    assert.equal(normalizeProvider("lm-studio"), "lmstudio");
+    assert.equal(normalizeProvider("ollama-local"), "ollama");
+  });
+});
+
+describe("normalizeProviderSlug", () => {
+  it("normalizes arbitrary provider ids to safe slug", () => {
+    assert.equal(normalizeProviderSlug("My Provider!"), "my-provider");
+    assert.equal(normalizeProviderSlug("  OpenAI-Compatible  "), "openai-compatible");
+  });
+});
+
+describe("getModelsDevProviderKeys", () => {
+  it("maps known provider aliases", () => {
+    const keys = getModelsDevProviderKeys("copilot", "https://api.githubcopilot.com");
+    assert.ok(keys.includes("copilot"));
+    assert.ok(keys.includes("github-copilot"));
+  });
+
+  it("derives keys from base URL host", () => {
+    const keys = getModelsDevProviderKeys("custom", "https://api.groq.com/openai/v1");
+    assert.ok(keys.includes("groq"));
+  });
+});
+
+describe("extractModelsFromModelsDevEntry", () => {
+  it("extracts model ids from models object", () => {
+    const ids = extractModelsFromModelsDevEntry({
+      models: {
+        "model-a": {},
+        "model-b": {},
+      },
+    });
+    assert.deepEqual(ids, ["model-a", "model-b"]);
+  });
+
+  it("returns empty array for invalid entry", () => {
+    assert.deepEqual(extractModelsFromModelsDevEntry(null), []);
+    assert.deepEqual(extractModelsFromModelsDevEntry({ models: null }), []);
+  });
+});
+
+describe("getModelsDevProviderCandidates", () => {
+  it("returns providers with api URLs not in built-in catalog", () => {
+    const registry = {
+      openai: { id: "openai", name: "OpenAI", api: "https://api.openai.com/v1", models: { "gpt-4o": {} } },
+      myprovider: { id: "myprovider", name: "My Provider", api: "https://api.myprovider.com/v1", models: { "model-x": {} } },
+    };
+    const candidates = getModelsDevProviderCandidates(registry);
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].id, "myprovider");
+    assert.equal(candidates[0].baseUrl, "https://api.myprovider.com/v1");
+    assert.ok(candidates[0].models.includes("model-x"));
+  });
+
+  it("ignores entries without api field", () => {
+    const registry = {
+      providerA: { id: "providerA", name: "Provider A" },
+    };
+    const candidates = getModelsDevProviderCandidates(registry);
+    assert.equal(candidates.length, 0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -455,5 +536,40 @@ describe("getExitCodeForError (connect)", () => {
   it("maps timeout and default", () => {
     assert.equal(getExitCodeForError({ code: ERROR_CODES.FETCH_TIMEOUT }), 7);
     assert.equal(getExitCodeForError({ code: "UNKNOWN" }), 1);
+  });
+});
+
+describe("getMenuWindow", () => {
+  it("returns full range when total <= page size", () => {
+    const w = getMenuWindow(5, 2, 10);
+    assert.equal(w.start, 0);
+    assert.equal(w.end, 5);
+  });
+
+  it("centers around selected item when possible", () => {
+    const w = getMenuWindow(100, 50, 10);
+    assert.equal(w.start, 45);
+    assert.equal(w.end, 55);
+  });
+
+  it("clamps to beginning and end boundaries", () => {
+    const a = getMenuWindow(100, 1, 10);
+    assert.equal(a.start, 0);
+    assert.equal(a.end, 10);
+
+    const b = getMenuWindow(100, 99, 10);
+    assert.equal(b.start, 90);
+    assert.equal(b.end, 100);
+  });
+});
+
+describe("truncateForTerminal", () => {
+  it("keeps short strings unchanged", () => {
+    assert.equal(truncateForTerminal("short", 20), "short");
+  });
+
+  it("truncates long strings with ellipsis", () => {
+    const out = truncateForTerminal("abcdefghijklmnopqrstuvwxyz", 10);
+    assert.equal(out, "abcdefg...");
   });
 });

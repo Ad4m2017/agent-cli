@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "1.0.0";
+const CONNECT_VERSION = "1.1.0";
 
 /**
  * Centralized error codes.
@@ -37,6 +37,7 @@ const ERROR_CODES = {
 };
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30000;
+const MODELS_DEV_API_URL = "https://models.dev/api.json";
 
 /**
  * Fetch wrapper with AbortController-based timeout.
@@ -92,6 +93,18 @@ const PROVIDER_CATALOG = {
     baseUrl: "https://api.moonshot.cn/v1",
     models: ["moonshot-v1-8k", "moonshot-v1-32k", "moonshot-v1-128k"],
   },
+  ollama: {
+    type: "local",
+    label: "Ollama",
+    baseUrl: "http://localhost:11434/v1",
+    models: ["llama3.1", "qwen2.5", "mistral"],
+  },
+  lmstudio: {
+    type: "local",
+    label: "LM Studio",
+    baseUrl: "http://localhost:1234/v1",
+    models: ["local-model"],
+  },
   openai: {
     type: "api",
     label: "OpenAI",
@@ -121,6 +134,12 @@ const PROVIDER_CATALOG = {
     label: "xAI",
     baseUrl: "https://api.x.ai/v1",
     models: ["grok-2-latest", "grok-2-mini-latest", "grok-beta"],
+  },
+  custom: {
+    type: "api",
+    label: "Custom OpenAI-Compatible",
+    baseUrl: "https://api.openai.com/v1",
+    models: [],
   },
 };
 
@@ -169,6 +188,27 @@ function getExitCodeForError(err) {
  * Simple interactive select menu using arrow keys + Enter.
  * Falls back to initial option in non-TTY environments.
  */
+function getMenuWindow(total, selected, pageSize) {
+  const size = Math.max(1, Math.floor(pageSize || 10));
+  const safeTotal = Math.max(0, Math.floor(total || 0));
+  const safeSelected = Math.max(0, Math.min(Math.floor(selected || 0), Math.max(0, safeTotal - 1)));
+  if (safeTotal <= size) {
+    return { start: 0, end: safeTotal, pageSize: size };
+  }
+  let start = safeSelected - Math.floor(size / 2);
+  if (start < 0) start = 0;
+  if (start + size > safeTotal) start = safeTotal - size;
+  return { start, end: start + size, pageSize: size };
+}
+
+function truncateForTerminal(text, maxWidth) {
+  const s = String(text == null ? "" : text);
+  const width = Math.max(10, Number.isFinite(maxWidth) ? Math.floor(maxWidth) : 120);
+  if (s.length <= width) return s;
+  if (width <= 3) return s.slice(0, width);
+  return `${s.slice(0, width - 3)}...`;
+}
+
 async function selectMenu(message, options, initialIndex = 0) {
   if (!Array.isArray(options) || options.length === 0) {
     throw makeError(ERROR_CODES.SELECT_OPTIONS_EMPTY, "Wizard options are missing.");
@@ -179,6 +219,7 @@ async function selectMenu(message, options, initialIndex = 0) {
   }
 
   let selected = Math.max(0, Math.min(initialIndex, options.length - 1));
+  const pageSize = 10;
   let renderedLines = 0;
 
   const render = () => {
@@ -188,10 +229,17 @@ async function selectMenu(message, options, initialIndex = 0) {
       }
     }
 
+    const w = getMenuWindow(options.length, selected, pageSize);
+    const pageOptions = options.slice(w.start, w.end);
+    const columns = Number(stdout.columns || 120);
+    const labelWidth = Math.max(20, columns - 4);
     const lines = [
-      `${message}`,
-      ...options.map((opt, idx) => `${idx === selected ? ">" : " "} ${opt.label}`),
-      "Use Up/Down and Enter.",
+      `${message} (${selected + 1}/${options.length})`,
+      ...pageOptions.map((opt, idx) => {
+        const absoluteIdx = w.start + idx;
+        return `${absoluteIdx === selected ? ">" : " "} ${truncateForTerminal(opt.label, labelWidth)}`;
+      }),
+      "Use Up/Down, n/p (+/-10), and Enter.",
     ];
 
     stdout.write(`${lines.join("\n")}\n`);
@@ -239,6 +287,18 @@ async function selectMenu(message, options, initialIndex = 0) {
         return;
       }
 
+      if (key.name === "n" || key.name === "pagedown") {
+        selected = Math.min(options.length - 1, selected + pageSize);
+        render();
+        return;
+      }
+
+      if (key.name === "p" || key.name === "pageup") {
+        selected = Math.max(0, selected - pageSize);
+        render();
+        return;
+      }
+
       if (key.name === "return") {
         finish(options[selected].value);
       }
@@ -249,10 +309,359 @@ async function selectMenu(message, options, initialIndex = 0) {
   });
 }
 
-function getProviderMenuOptions() {
+async function multiSelectMenu(message, options, initiallySelectedValues) {
+  if (!Array.isArray(options) || options.length === 0) {
+    throw makeError(ERROR_CODES.SELECT_OPTIONS_EMPTY, "Wizard options are missing.");
+  }
+
+  if (!stdin.isTTY || !stdout.isTTY) {
+    return Array.isArray(initiallySelectedValues) ? initiallySelectedValues : [];
+  }
+
+  const selectedSet = new Set(Array.isArray(initiallySelectedValues) ? initiallySelectedValues : []);
+  let cursor = 0;
+  const pageSize = 10;
+  let renderedLines = 0;
+
+  const render = () => {
+    if (renderedLines > 0) {
+      for (let i = 0; i < renderedLines; i += 1) {
+        stdout.write("\x1b[1A\x1b[2K\r");
+      }
+    }
+
+    const w = getMenuWindow(options.length, cursor, pageSize);
+    const pageOptions = options.slice(w.start, w.end);
+    const columns = Number(stdout.columns || 120);
+    const labelWidth = Math.max(20, columns - 10);
+    const lines = [
+      `${message} (${cursor + 1}/${options.length})`,
+      ...pageOptions.map((opt, idx) => {
+        const absoluteIdx = w.start + idx;
+        const pointer = absoluteIdx === cursor ? ">" : " ";
+        const checked = selectedSet.has(opt.value) ? "x" : " ";
+        return `${pointer} [${checked}] ${truncateForTerminal(opt.label, labelWidth)}`;
+      }),
+      "Use Up/Down, Space toggle, n/p (+/-10), Enter confirm.",
+    ];
+
+    stdout.write(`${lines.join("\n")}\n`);
+    renderedLines = lines.length;
+  };
+
+  return new Promise((resolve, reject) => {
+    readline.emitKeypressEvents(stdin);
+    stdin.resume();
+    const previousRaw = stdin.isRaw;
+    if (!previousRaw) stdin.setRawMode(true);
+
+    const cleanup = () => {
+      stdin.removeListener("keypress", onKeypress);
+      if (!previousRaw) stdin.setRawMode(false);
+    };
+
+    const finish = () => {
+      cleanup();
+      resolve(Array.from(selectedSet));
+    };
+
+    const fail = (err) => {
+      cleanup();
+      reject(err);
+    };
+
+    const onKeypress = (_str, key) => {
+      if (!key) return;
+      if (key.ctrl && key.name === "c") {
+        fail(makeError(ERROR_CODES.INTERRUPTED, "Wizard interrupted."));
+        return;
+      }
+      if (key.name === "up") {
+        cursor = (cursor - 1 + options.length) % options.length;
+        render();
+        return;
+      }
+      if (key.name === "down") {
+        cursor = (cursor + 1) % options.length;
+        render();
+        return;
+      }
+      if (key.name === "n" || key.name === "pagedown") {
+        cursor = Math.min(options.length - 1, cursor + pageSize);
+        render();
+        return;
+      }
+      if (key.name === "p" || key.name === "pageup") {
+        cursor = Math.max(0, cursor - pageSize);
+        render();
+        return;
+      }
+      if (key.name === "space") {
+        const v = options[cursor].value;
+        if (selectedSet.has(v)) selectedSet.delete(v);
+        else selectedSet.add(v);
+        render();
+        return;
+      }
+      if (key.name === "return") {
+        finish();
+      }
+    };
+
+    stdin.on("keypress", onKeypress);
+    render();
+  });
+}
+
+async function fetchProviderModels(baseUrl, authToken) {
+  const root = String(baseUrl || "").replace(/\/$/, "");
+  if (!root) return [];
+  const headers = { Accept: "application/json" };
+  if (authToken) headers.Authorization = `Bearer ${authToken}`;
+
+  const res = await fetchWithTimeout(`${root}/models`, {
+    method: "GET",
+    headers,
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json || !Array.isArray(json.data)) return [];
+
+  const ids = json.data
+    .map((m) => (m && typeof m.id === "string" ? m.id.trim() : ""))
+    .filter(Boolean);
+  return Array.from(new Set(ids)).sort((a, b) => a.localeCompare(b));
+}
+
+function getModelsDevProviderKeys(provider, baseUrl) {
+  const p = String(provider || "").trim().toLowerCase();
+  const keys = [];
+  if (p) keys.push(p);
+  if (p === "copilot") keys.push("github-copilot");
+  if (p === "moonshot") keys.push("moonshotai");
+  if (p === "lmstudio") keys.push("lm-studio", "lm_studio");
+
+  const host = (() => {
+    try {
+      return new URL(String(baseUrl || "")).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+
+  if (host.includes("openrouter")) keys.push("openrouter");
+  if (host.includes("groq")) keys.push("groq");
+  if (host.includes("perplexity")) keys.push("perplexity");
+  if (host.includes("moonshot")) keys.push("moonshotai", "moonshot");
+  if (host.includes("deepseek")) keys.push("deepseek");
+  if (host.includes("mistral")) keys.push("mistral");
+  if (host.includes("together")) keys.push("together");
+  if (host.includes("x.ai")) keys.push("xai");
+  if (host.includes("githubcopilot")) keys.push("github-copilot");
+  if (host.includes("localhost") || host.includes("127.0.0.1")) keys.push("ollama", "lm-studio", "lmstudio");
+
+  return Array.from(new Set(keys.filter(Boolean)));
+}
+
+async function fetchModelsFromModelsDev(provider, baseUrl) {
+  const res = await fetchWithTimeout(MODELS_DEV_API_URL, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  }, 20000);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json || typeof json !== "object") return [];
+
+  const providerKeys = getModelsDevProviderKeys(provider, baseUrl);
+  for (const key of providerKeys) {
+    const entry = json[key];
+    if (!entry || typeof entry !== "object") continue;
+    const models = entry.models;
+    if (!models || typeof models !== "object") continue;
+    const ids = Object.keys(models)
+      .map((id) => String(id || "").trim())
+      .filter(Boolean);
+    if (ids.length > 0) return Array.from(new Set(ids)).sort((a, b) => a.localeCompare(b));
+  }
+
+  return [];
+}
+
+async function fetchModelsDevRegistry() {
+  const res = await fetchWithTimeout(MODELS_DEV_API_URL, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "agent-connect.js",
+    },
+  }, 20000);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || !json || typeof json !== "object") return {};
+  return json;
+}
+
+function extractModelsFromModelsDevEntry(entry) {
+  if (!entry || typeof entry !== "object") return [];
+  const models = entry.models;
+  if (!models || typeof models !== "object") return [];
+  return Object.keys(models)
+    .map((id) => String(id || "").trim())
+    .filter(Boolean);
+}
+
+function getModelsDevProviderCandidates(registry) {
+  const out = [];
+  if (!registry || typeof registry !== "object") return out;
+
+  for (const [id, entry] of Object.entries(registry)) {
+    if (!entry || typeof entry !== "object") continue;
+    if (Object.prototype.hasOwnProperty.call(PROVIDER_CATALOG, id)) continue;
+
+    const apiUrl = typeof entry.api === "string" ? entry.api.trim() : "";
+    if (!apiUrl) continue;
+
+    const name = typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : id;
+    const models = extractModelsFromModelsDevEntry(entry);
+    out.push({
+      id,
+      name,
+      baseUrl: apiUrl,
+      models,
+      label: `${name} (${id})`,
+    });
+  }
+
+  out.sort((a, b) => a.id.localeCompare(b.id));
+  return out;
+}
+
+function buildProviderModelList(provider, providerInfo, dynamicModels) {
+  const list = Array.isArray(dynamicModels) && dynamicModels.length > 0
+    ? dynamicModels
+    : Array.isArray(providerInfo.models)
+      ? providerInfo.models
+      : [];
+  return Array.from(new Set(list.filter(Boolean)));
+}
+
+async function chooseEnabledModels(rl, provider, providerInfo, entry) {
+  let discovered = [];
+  const authToken = entry.apiKey || entry.oauthAccessToken || entry.copilotToken || "";
+  const shouldFetchLive = stdin.isTTY && stdout.isTTY
+    ? await askYesNo(rl, "Try to fetch live models from provider now?", true)
+    : true;
+
+  if (shouldFetchLive) {
+    try {
+      discovered = await fetchProviderModels(entry.baseUrl, authToken);
+      if (discovered.length === 0 && stdin.isTTY && stdout.isTTY) {
+        process.stdout.write("No models returned from provider /models endpoint. Falling back to catalog/manual input.\n");
+      }
+    } catch {
+      if (stdin.isTTY && stdout.isTTY) {
+        process.stdout.write("Could not fetch live models. Falling back to catalog/manual input.\n");
+      }
+    }
+  }
+
+  let community = [];
+  if (discovered.length === 0) {
+    const useModelsDev = stdin.isTTY && stdout.isTTY
+      ? await askYesNo(rl, "Load community models from models.dev?", true)
+      : false;
+    if (useModelsDev) {
+      try {
+        community = await fetchModelsFromModelsDev(provider, entry.baseUrl);
+        if (community.length === 0 && stdin.isTTY && stdout.isTTY) {
+          process.stdout.write("models.dev returned no models for this provider.\n");
+        }
+      } catch {
+        if (stdin.isTTY && stdout.isTTY) {
+          process.stdout.write("Could not load models from models.dev.\n");
+        }
+      }
+    }
+  }
+
+  const available = buildProviderModelList(provider, providerInfo, discovered.length > 0 ? discovered : community);
+  const prefixed = available.map((m) => `${provider}/${m}`);
+
+  if (prefixed.length === 0) {
+    const manual = (await rl.question(`No known models found for ${provider}. Enter models (comma-separated, provider/model or model): `)).trim();
+    if (manual) {
+      const parsed = manual
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((m) => (m.includes("/") ? m : `${provider}/${m}`));
+      if (parsed.length > 0) return Array.from(new Set(parsed));
+    }
+  }
+
+  if (stdin.isTTY && stdout.isTTY) {
+    const opts = prefixed.map((v) => ({ value: v, label: v }));
+    const selected = await multiSelectMenu("Select enabled models:", opts, entry.enabledModels || prefixed.slice(0, 1));
+    if (selected.length > 0) return selected;
+  } else {
+    const sample = prefixed.slice(0, 5).join(", ");
+    const raw = (await rl.question(`Enabled models comma-separated [${sample}]: `)).trim();
+    if (raw) {
+      const parsed = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((m) => (m.includes("/") ? m : `${provider}/${m}`));
+      if (parsed.length > 0) return Array.from(new Set(parsed));
+    }
+  }
+
+  if (prefixed.length > 0) return [prefixed[0]];
+  return [];
+}
+
+async function chooseDefaultModelFromEnabled(rl, provider, enabledModels, fallbackModel) {
+  const list = Array.isArray(enabledModels) && enabledModels.length > 0 ? enabledModels : [fallbackModel].filter(Boolean);
+  if (list.length === 0) {
+    const customOnly = (await rl.question(`No models available for ${provider}. Enter custom model (${provider}/...): `)).trim();
+    if (!customOnly) return "";
+    return customOnly.includes("/") ? customOnly : `${provider}/${customOnly}`;
+  }
+
+  if (stdin.isTTY && stdout.isTTY) {
+    const options = list.map((m) => ({ value: m, label: m }));
+    options.push({ value: "__custom__", label: "Custom model..." });
+    const idx = Math.max(0, options.findIndex((o) => o.value === fallbackModel));
+    const picked = await selectMenu("Select default model:", options, idx >= 0 ? idx : 0);
+    if (picked === "__custom__") {
+      const custom = (await rl.question(`Custom model (${provider}/...): `)).trim();
+      if (!custom) return list[0];
+      return custom.includes("/") ? custom : `${provider}/${custom}`;
+    }
+    return picked;
+  }
+
+  const input = (await rl.question(`Default model [${list[0]}]: `)).trim();
+  return input || list[0];
+}
+
+function getProviderStatus(provider, providersConfig, agentConfig) {
+  const installed = !!(
+    providersConfig &&
+    providersConfig.providers &&
+    Object.prototype.hasOwnProperty.call(providersConfig.providers, provider)
+  );
+  const isDefault = !!(
+    agentConfig &&
+    agentConfig.runtime &&
+    agentConfig.runtime.defaultProvider === provider
+  );
+  if (installed && isDefault) return "installed, default";
+  if (installed) return "installed";
+  return "not configured";
+}
+
+function getProviderMenuOptions(providersConfig, agentConfig) {
   return SORTED_PROVIDERS.map((provider) => ({
     value: provider,
-    label: PROVIDER_CATALOG[provider].label,
+    label: `${PROVIDER_CATALOG[provider].label} (${getProviderStatus(provider, providersConfig, agentConfig)})`,
   }));
 }
 
@@ -577,14 +986,19 @@ function normalizeProvider(input) {
   const p = (input || "").trim().toLowerCase();
   if (p === "github" || p === "github-copilot" || p === "copilot") return "copilot";
   if (p === "x.ai") return "xai";
+  if (p === "ollama-local") return "ollama";
+  if (p === "lm-studio" || p === "lm_studio") return "lmstudio";
   if (Object.prototype.hasOwnProperty.call(PROVIDER_CATALOG, p)) return p;
   return "";
 }
 
 /** Interactive provider selector for users not passing --provider. */
-async function chooseProvider(rl) {
+async function chooseProvider(rl, providersConfig, agentConfig) {
   if (stdin.isTTY && stdout.isTTY) {
-    return selectMenu("Select provider:", getProviderMenuOptions(), 0);
+    const options = getProviderMenuOptions(providersConfig, agentConfig).concat([
+      { value: "__models_dev__", label: "Load provider from models.dev..." },
+    ]);
+    return selectMenu("Select provider:", options, 0);
   }
 
   const answer = await rl.question(`Provider (${SORTED_PROVIDERS.join("/")}): `);
@@ -593,6 +1007,60 @@ async function chooseProvider(rl) {
     throw makeError(ERROR_CODES.PROVIDER_INVALID, `Unknown provider. Allowed: ${SORTED_PROVIDERS.join(", ")}.`);
   }
   return p;
+}
+
+async function chooseProviderFromModelsDev(rl) {
+  const registry = await fetchModelsDevRegistry();
+  const candidates = getModelsDevProviderCandidates(registry);
+  if (candidates.length === 0) {
+    throw makeError(ERROR_CODES.PROVIDER_INVALID, "No provider candidates with API URLs found on models.dev.");
+  }
+
+  if (stdin.isTTY && stdout.isTTY) {
+    const options = candidates.map((c) => ({
+      value: c.id,
+      label: `${c.label} - ${c.baseUrl}`,
+    }));
+    const selectedId = await selectMenu("Select provider from models.dev:", options, 0);
+    return candidates.find((c) => c.id === selectedId) || candidates[0];
+  }
+
+  const ids = candidates.map((c) => c.id);
+  const answer = (await rl.question(`Provider id from models.dev (${ids.join("/")}): `)).trim();
+  const found = candidates.find((c) => c.id === answer);
+  return found || candidates[0];
+}
+
+async function setupModelsDevProvider(rl, providersConfig, agentConfig, candidate) {
+  const providerId = normalizeProviderSlug(candidate && candidate.id ? candidate.id : "") || "custom-provider";
+  const defaultBase = candidate && candidate.baseUrl ? candidate.baseUrl : "https://api.openai.com/v1";
+  const baseUrl = (await rl.question(`Base URL [${defaultBase}]: `)).trim() || defaultBase;
+  const apiKey = (await rl.question(`${candidate && candidate.name ? candidate.name : providerId} API key: `)).trim();
+  if (!apiKey) {
+    throw makeError(ERROR_CODES.API_KEY_REQUIRED, "API key is required. Aborting setup.");
+  }
+
+  const entry = {
+    kind: "openai_compatible",
+    baseUrl,
+    apiKey,
+  };
+
+  entry.enabledModels = await chooseEnabledModels(
+    rl,
+    providerId,
+    { models: Array.isArray(candidate && candidate.models) ? candidate.models : [] },
+    entry
+  );
+  providersConfig.providers[providerId] = entry;
+
+  const setDefault = await askYesNo(rl, `Set '${providerId}' as default provider?`, true);
+  if (setDefault) {
+    agentConfig.runtime.defaultProvider = providerId;
+    const fallbackModel = entry.enabledModels && entry.enabledModels.length > 0 ? entry.enabledModels[0] : `${providerId}/model`;
+    const selectedDefault = await chooseDefaultModelFromEnabled(rl, providerId, entry.enabledModels || [], fallbackModel);
+    if (selectedDefault) agentConfig.runtime.defaultModel = selectedDefault;
+  }
 }
 
 /** Small helper for yes/no prompts with default behavior. */
@@ -605,51 +1073,152 @@ async function askYesNo(rl, question, yesDefault) {
   return yesDefault;
 }
 
+async function chooseMainAction(rl) {
+  if (stdin.isTTY && stdout.isTTY) {
+    const options = [
+      { value: "setup", label: "Setup or reconfigure provider" },
+      { value: "switch_default", label: "Set default provider/model only" },
+      { value: "exit", label: "Exit" },
+    ];
+    return selectMenu("Select action:", options, 0);
+  }
+
+  const action = (await rl.question("Action [setup/switch_default/exit] (default: setup): ")).trim().toLowerCase();
+  if (action === "switch_default" || action === "exit") return action;
+  return "setup";
+}
+
+async function chooseConfiguredProvider(rl, providersConfig, agentConfig) {
+  const configured = SORTED_PROVIDERS.filter((p) => providersConfig.providers && providersConfig.providers[p]);
+  if (configured.length === 0) {
+    throw makeError(ERROR_CODES.PROVIDER_INVALID, "No configured providers found.");
+  }
+
+  if (stdin.isTTY && stdout.isTTY) {
+    const options = configured.map((p) => {
+      const label = PROVIDER_CATALOG[p] ? PROVIDER_CATALOG[p].label : p;
+      const isDefault = !!(agentConfig && agentConfig.runtime && agentConfig.runtime.defaultProvider === p);
+      return { value: p, label: isDefault ? `${label} (default)` : label };
+    });
+    return selectMenu("Select configured provider:", options, 0);
+  }
+
+  const answer = (await rl.question(`Configured provider (${configured.join("/")}): `)).trim().toLowerCase();
+  if (configured.includes(answer)) return answer;
+  return configured[0];
+}
+
+async function setDefaultOnlyFlow(rl, providersConfig, agentConfig) {
+  const provider = await chooseConfiguredProvider(rl, providersConfig, agentConfig);
+  const entry = providersConfig.providers[provider] || {};
+  const providerInfo = PROVIDER_CATALOG[provider] || { models: [] };
+
+  const supportsModelRefresh = entry.kind === "openai_compatible" || entry.kind === "github_copilot";
+  if (supportsModelRefresh) {
+    const refreshModels = stdin.isTTY && stdout.isTTY
+      ? await askYesNo(rl, `Refresh available models for '${provider}' now?`, false)
+      : false;
+    if (refreshModels) {
+      entry.enabledModels = await chooseEnabledModels(rl, provider, providerInfo, entry);
+      providersConfig.providers[provider] = entry;
+    }
+  }
+
+  const fallback = `${provider}/${(PROVIDER_CATALOG[provider] && PROVIDER_CATALOG[provider].models && PROVIDER_CATALOG[provider].models[0]) || ""}`;
+  const enabled = Array.isArray(entry.enabledModels) && entry.enabledModels.length > 0
+    ? entry.enabledModels
+    : [fallback].filter(Boolean);
+  const selectedDefault = await chooseDefaultModelFromEnabled(rl, provider, enabled, enabled[0] || "");
+
+  agentConfig.runtime.defaultProvider = provider;
+  if (selectedDefault) agentConfig.runtime.defaultModel = selectedDefault;
+}
+
 /**
  * Configure API-key providers via openai_compatible transport.
  * Stores apiKey + baseUrl + optional defaults.
  */
 async function setupApiProvider(rl, providersConfig, agentConfig, provider) {
   const providerInfo = PROVIDER_CATALOG[provider];
-  if (!providerInfo || providerInfo.type !== "api") {
+  if (!providerInfo || (providerInfo.type !== "api" && providerInfo.type !== "local")) {
     throw makeError(ERROR_CODES.PROVIDER_UNSUPPORTED, `Provider '${provider}' hat keinen API-Key Setup-Flow.`);
-  }
-
-  const keyPrompt = `${providerInfo.label} API key: `;
-  const apiKey = (await rl.question(keyPrompt)).trim();
-  if (!apiKey) {
-    throw makeError(ERROR_CODES.API_KEY_REQUIRED, "API key is required. Aborting setup.");
   }
 
   const defaultBase = providerInfo.baseUrl;
   const baseUrlInput = (await rl.question(`Base URL [${defaultBase}]: `)).trim();
+  const baseUrl = baseUrlInput || defaultBase;
 
-  providersConfig.providers[provider] = {
+  let apiKey = "";
+  if (providerInfo.type === "api") {
+    const keyPrompt = `${providerInfo.label} API key: `;
+    apiKey = (await rl.question(keyPrompt)).trim();
+    if (!apiKey && provider !== "custom") {
+      throw makeError(ERROR_CODES.API_KEY_REQUIRED, "API key is required. Aborting setup.");
+    }
+  } else {
+    const keyPrompt = `${providerInfo.label} API key (optional): `;
+    apiKey = (await rl.question(keyPrompt)).trim();
+  }
+
+  const entry = {
     kind: "openai_compatible",
-    baseUrl: baseUrlInput || defaultBase,
-    apiKey,
+    baseUrl,
   };
+  if (apiKey) entry.apiKey = apiKey;
+
+  entry.enabledModels = await chooseEnabledModels(rl, provider, providerInfo, entry);
+
+  providersConfig.providers[provider] = entry;
 
   const setDefault = await askYesNo(rl, `Set '${provider}' as default provider?`, true);
   if (setDefault) {
     agentConfig.runtime.defaultProvider = provider;
-    if (stdin.isTTY && stdout.isTTY) {
-      const picked = await selectMenu("Select default model:", getModelMenuOptions(provider), 0);
-      if (picked === "__custom__") {
-        const custom = (await rl.question(`Custom model (${provider}/...): `)).trim();
-        if (custom) {
-          agentConfig.runtime.defaultModel = custom;
-        }
-      } else {
-        agentConfig.runtime.defaultModel = picked;
-      }
-    } else {
-      const modelSuggestion = `${provider}/${providerInfo.models[0]}`;
-      const modelInput = (await rl.question(`Default model [${modelSuggestion}]: `)).trim();
-      agentConfig.runtime.defaultModel = modelInput || modelSuggestion;
-    }
+    const fallbackModel = entry.enabledModels && entry.enabledModels.length > 0
+      ? entry.enabledModels[0]
+      : `${provider}/${providerInfo.models && providerInfo.models[0] ? providerInfo.models[0] : ""}`;
+    const selectedDefault = await chooseDefaultModelFromEnabled(rl, provider, entry.enabledModels || [], fallbackModel);
+    if (selectedDefault) agentConfig.runtime.defaultModel = selectedDefault;
   }
 }
+
+function normalizeProviderSlug(input) {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function setupCustomProvider(rl, providersConfig, agentConfig, suggestedProvider) {
+  const defaultSlug = normalizeProviderSlug(suggestedProvider || "custom");
+  const slugInput = (await rl.question(`Provider id [${defaultSlug || "custom"}]: `)).trim();
+  const providerId = normalizeProviderSlug(slugInput || defaultSlug || "custom");
+  if (!providerId) {
+    throw makeError(ERROR_CODES.PROVIDER_INVALID, "Custom provider id is required.");
+  }
+
+  const baseUrl = (await rl.question("Base URL (OpenAI-compatible) [http://localhost:11434/v1]: ")).trim() || "http://localhost:11434/v1";
+  const apiKey = (await rl.question("API key (optional): ")).trim();
+
+  const entry = {
+    kind: "openai_compatible",
+    baseUrl,
+  };
+  if (apiKey) entry.apiKey = apiKey;
+
+  entry.enabledModels = await chooseEnabledModels(rl, providerId, { models: [] }, entry);
+  providersConfig.providers[providerId] = entry;
+
+  const setDefault = await askYesNo(rl, `Set '${providerId}' as default provider?`, true);
+  if (setDefault) {
+    agentConfig.runtime.defaultProvider = providerId;
+    const fallbackModel = entry.enabledModels && entry.enabledModels.length > 0 ? entry.enabledModels[0] : `${providerId}/model`;
+    const selectedDefault = await chooseDefaultModelFromEnabled(rl, providerId, entry.enabledModels || [], fallbackModel);
+    if (selectedDefault) agentConfig.runtime.defaultModel = selectedDefault;
+  }
+}
+
+
 
 /**
  * Default Copilot OAuth and API endpoints/headers.
@@ -821,28 +1390,34 @@ async function setupCopilot(rl, providersConfig, agentConfig) {
     githubTokenExpiresAt,
     copilotToken: copilot.copilotToken,
     copilotTokenExpiresAt: copilot.copilotTokenExpiresAt,
+    baseUrl: defaults.api.baseUrl,
     oauth: defaults.oauth,
     api: defaults.api,
     extraHeaders: defaults.extraHeaders,
   };
 
+  providersConfig.providers.copilot.enabledModels = await chooseEnabledModels(
+    rl,
+    "copilot",
+    PROVIDER_CATALOG.copilot,
+    providersConfig.providers.copilot
+  );
+
   const setDefault = await askYesNo(rl, "Set 'copilot' as default provider?", true);
   if (setDefault) {
     agentConfig.runtime.defaultProvider = "copilot";
-    if (stdin.isTTY && stdout.isTTY) {
-      const picked = await selectMenu("Select default model:", getModelMenuOptions("copilot"), 0);
-      if (picked === "__custom__") {
-        const custom = (await rl.question("Custom model (copilot/...): ")).trim();
-        if (custom) {
-          agentConfig.runtime.defaultModel = custom;
-        }
-      } else {
-        agentConfig.runtime.defaultModel = picked;
-      }
-    } else {
-      const defaultModel = "copilot/gpt-4o";
-      const modelInput = (await rl.question(`Default model [${defaultModel}]: `)).trim();
-      agentConfig.runtime.defaultModel = modelInput || defaultModel;
+    const fallbackModel =
+      providersConfig.providers.copilot.enabledModels && providersConfig.providers.copilot.enabledModels.length > 0
+        ? providersConfig.providers.copilot.enabledModels[0]
+        : "copilot/gpt-4o";
+    const selectedDefault = await chooseDefaultModelFromEnabled(
+      rl,
+      "copilot",
+      providersConfig.providers.copilot.enabledModels || [],
+      fallbackModel
+    );
+    if (selectedDefault) {
+      agentConfig.runtime.defaultModel = selectedDefault;
     }
   }
 }
@@ -866,16 +1441,43 @@ async function main() {
   const rl = readlinePromises.createInterface({ input: stdin, output: stdout });
 
   try {
-    let provider = normalizeProvider(opts.provider);
+    const action = opts.provider ? "setup" : await chooseMainAction(rl);
+    if (action === "exit") {
+      process.stdout.write("Bye.\n");
+      return;
+    }
+
+    if (action === "switch_default") {
+      await setDefaultOnlyFlow(rl, providersConfig, agentConfig);
+      saveConfig(providersConfig, paths.authConfigPath);
+      saveAgentConfig(agentConfig, paths.agentConfigPath);
+      process.stdout.write(`\nSaved: ${paths.authConfigPath}\n`);
+      process.stdout.write(`Saved: ${paths.agentConfigPath}\n`);
+      return;
+    }
+
+    const rawProvider = (opts.provider || "").trim();
+    let provider = normalizeProvider(rawProvider);
+    const providerWasUnknown = !!rawProvider && !provider;
     if (!provider) {
-      provider = await chooseProvider(rl);
+      provider = await chooseProvider(rl, providersConfig, agentConfig);
+    }
+
+    if (provider === "__models_dev__") {
+      const candidate = await chooseProviderFromModelsDev(rl);
+      await setupModelsDevProvider(rl, providersConfig, agentConfig, candidate);
+      provider = "";
     }
 
     if (provider === "copilot") {
       await setupCopilot(rl, providersConfig, agentConfig);
-    } else if (PROVIDER_CATALOG[provider] && PROVIDER_CATALOG[provider].type === "api") {
+    } else if (provider === "openai") {
       await setupApiProvider(rl, providersConfig, agentConfig, provider);
-    } else {
+    } else if (provider === "custom" || providerWasUnknown) {
+      await setupCustomProvider(rl, providersConfig, agentConfig, providerWasUnknown ? rawProvider : "custom");
+    } else if (provider && PROVIDER_CATALOG[provider] && (PROVIDER_CATALOG[provider].type === "api" || PROVIDER_CATALOG[provider].type === "local")) {
+      await setupApiProvider(rl, providersConfig, agentConfig, provider);
+    } else if (provider) {
       throw makeError(ERROR_CODES.PROVIDER_UNSUPPORTED, "Provider is not supported.");
     }
 
@@ -981,6 +1583,8 @@ module.exports = {
   redactSensitiveText,
   getErrorCode,
   getExitCodeForError,
+  getMenuWindow,
+  truncateForTerminal,
   getProviderMenuOptions,
   getModelMenuOptions,
   parseArgs,
@@ -988,6 +1592,10 @@ module.exports = {
   validateConfigPath,
   writeJsonAtomic,
   normalizeProvider,
+  normalizeProviderSlug,
+  getModelsDevProviderKeys,
+  extractModelsFromModelsDevEntry,
+  getModelsDevProviderCandidates,
   defaultAgentConfig,
   getCopilotDefaults,
 };
