@@ -23,7 +23,7 @@
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle Theme"><svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               <option value="./index.html" selected>🇺🇸 English</option>
 <option value="./de/index.html">🇩🇪 Deutsch</option>
@@ -34,7 +34,7 @@
 <h1 id="agent-cli-documentation">Agent CLI Documentation</h1>
 <p>A zero-dependency, multi-provider AI agent for the terminal. No frameworks, no servers, no databases -- just Node.js and your preferred AI provider.</p>
 <h2 id="why-agent-cli">Why agent-cli?</h2>
-<ul><li>**Zero dependencies** -- no <code>node_modules</code>, no supply-chain risk</li><li>**11 providers** -- switch providers with one config change</li><li>**Security-first** -- configurable command policies prevent destructive operations</li><li>**Works everywhere** -- SSH, containers, CI, remote servers</li><li>**Local-only** -- credentials stay on your machine</li></ul>
+<ul><li><strong>Zero dependencies</strong> -- no <code>node_modules</code>, no supply-chain risk</li><li><strong>11 providers</strong> -- switch providers with one config change</li><li><strong>Security-first</strong> -- configurable command policies prevent destructive operations</li><li><strong>Works everywhere</strong> -- SSH, containers, CI, remote servers</li><li><strong>Local-only</strong> -- credentials stay on your machine</li></ul>
 <h2 id="how-it-works">How It Works</h2>
 <p>agent-cli sends your prompt to an AI model via the OpenAI-compatible chat completions API. The model can respond with plain text or request tool calls. Currently, the agent supports one tool: <code>run_command</code>, which executes shell commands.</p>
 <p>The execution follows an agentic loop:</p>
@@ -51,6 +51,8 @@ cd agent-cli</code></pre>
 <pre><code class="language-bash">node agent-connect.js</code></pre>
 <p>In TTY terminals, use arrow keys and Enter to navigate menus. The wizard writes:</p>
 <ul><li>Runtime defaults and security policy to <code>agent.json</code></li><li>Provider credentials to <code>agent.auth.json</code> (plaintext, file permissions set to 0600)</li></ul>
+<p>Wizard behavior includes:</p>
+<ul><li>Provider status labels (<code>installed</code>, <code>installed, default</code>, <code>not configured</code>)</li><li>Top-level quick action: <code>Set default provider/model only</code></li><li>Optional model refresh via live provider <code>/models</code></li><li>Optional fallback model list loading from <code>models.dev</code></li><li>Provider source option: <code>Load provider from models.dev...</code> (imports provider API URL and model candidates)</li><li>Paged list navigation for long menus (<code>n</code>/<code>p</code> jump by 10)</li></ul>
 <p>Config files are now written atomically (temp file + rename) to reduce risk of corrupted JSON if a process is interrupted during write.</p>
 <h3 id="direct-provider-setup">Direct Provider Setup</h3>
 <pre><code class="language-bash">node agent-connect.js --provider openai
@@ -63,7 +65,9 @@ node agent-connect.js --provider perplexity
 node agent-connect.js --provider together
 node agent-connect.js --provider fireworks
 node agent-connect.js --provider moonshot
-node agent-connect.js --provider xai</code></pre>
+node agent-connect.js --provider xai
+node agent-connect.js --provider ollama
+node agent-connect.js --provider lmstudio</code></pre>
 <h3 id="copilot-setup">Copilot Setup</h3>
 <p>GitHub Copilot uses OAuth device flow. The wizard will:</p>
 <ol><li>Generate a device code</li><li>Ask you to open a URL in your browser</li><li>Enter the code on GitHub</li><li>Automatically exchange tokens once confirmed</li></ol>
@@ -81,23 +85,23 @@ node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versa
 <p>The loop runs for up to 5 turns before the agent forces a final text response.</p>
 <h3 id="security-modes">Security Modes</h3>
 <p>Every command the AI wants to execute is checked against a three-layer security policy defined in <code>agent.json</code>:</p>
-<p>**Layer 1: denyCritical** -- always blocks catastrophic commands regardless of mode:</p>
+<p><strong>Layer 1: denyCritical</strong> -- always blocks catastrophic commands regardless of mode:</p>
 <ul><li><code>rm -rf /</code></li><li><code>mkfs</code></li><li><code>shutdown</code>, <code>reboot</code>, <code>poweroff</code></li><li><code>dd if=</code></li><li>Piping curl/wget into sh/bash</li></ul>
-<p>**Layer 2: Mode-specific deny rules** -- blocks commands based on current mode.</p>
-<p>**Layer 3: Mode-specific allow rules** -- only explicitly allowed commands can run.</p>
+<p><strong>Layer 2: Mode-specific deny rules</strong> -- blocks commands based on current mode.</p>
+<p><strong>Layer 3: Mode-specific allow rules</strong> -- only explicitly allowed commands can run.</p>
 <p>Evaluation order: denyCritical -&gt; deny -&gt; allow. A command must pass all three layers.</p>
 <p>The three modes:</p>
-<ul><li>**plan** -- Read-only exploration. Only <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> are allowed. Destructive commands, package installs, and pushes are blocked.</li><li>**build** (default) -- Normal development. Git, Node.js, npm, Python, Docker, Make are allowed. <code>rm</code>, <code>sudo</code>, and system-level commands are blocked.</li><li>**unsafe** -- Broad scope. All commands allowed except <code>denyCritical</code> items. Use with caution.</li></ul>
+<ul><li><strong>plan</strong> -- Read-only exploration. Only <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> are allowed. Destructive commands, package installs, and pushes are blocked.</li><li><strong>build</strong> (default) -- Normal development. Git, Node.js, npm, Python, Docker, Make are allowed. <code>rm</code>, <code>sudo</code>, and system-level commands are blocked.</li><li><strong>unsafe</strong> -- Broad scope. All commands allowed except <code>denyCritical</code> items. Use with caution.</li></ul>
 <h3 id="approval-modes">Approval Modes</h3>
 <p>Controls human-in-the-loop behavior for command execution:</p>
-<ul><li>**ask** (default) -- The agent prompts you before every command: <code>Approve? [y/N]</code>. Requires a TTY terminal. This is the safest mode for interactive use.</li><li>**auto** -- Executes policy-allowed commands immediately without prompting. Required for CI/CD and scripting. Use with <code>--json</code> for automation.</li><li>**never** -- Blocks all command execution. The AI can only respond with text, never run commands.</li></ul>
+<ul><li><strong>ask</strong> (default) -- The agent prompts you before every command: <code>Approve? [y/N]</code>. Requires a TTY terminal. This is the safest mode for interactive use.</li><li><strong>auto</strong> -- Executes policy-allowed commands immediately without prompting. Required for CI/CD and scripting. Use with <code>--json</code> for automation.</li><li><strong>never</strong> -- Blocks all command execution. The AI can only respond with text, never run commands.</li></ul>
 <h3 id="tools-modes">Tools Modes</h3>
 <p>Controls whether tool-calling payloads are included in API requests:</p>
-<ul><li>**auto** (default) -- Sends tool definitions to the model. If the model rejects them (e.g., Perplexity models), automatically retries without tools.</li><li>**on** -- Always sends tool definitions. Returns <code>TOOLS_NOT_SUPPORTED</code> error if the model cannot handle them.</li><li>**off** -- Never sends tool definitions. The AI responds with text only.</li></ul>
+<ul><li><strong>auto</strong> (default) -- Sends tool definitions to the model. If the model rejects them (e.g., Perplexity models), automatically retries without tools.</li><li><strong>on</strong> -- Always sends tool definitions. Returns <code>TOOLS_NOT_SUPPORTED</code> error if the model cannot handle them.</li><li><strong>off</strong> -- Never sends tool definitions. The AI responds with text only.</li></ul>
 <p>Use <code>--no-tools</code> as a shorthand for <code>--tools off</code>.</p>
 <h3 id="providers">Providers</h3>
 <p>All providers except Copilot use the standard OpenAI-compatible <code>/chat/completions</code> endpoint. This means any OpenAI-compatible service works.</p>
-<ul><li>**openai** -- gpt-4.1-mini, gpt-4.1, gpt-4o, gpt-4o-mini, gpt-5-mini</li><li>**copilot** -- GitHub Copilot via OAuth device flow</li><li>**deepseek** -- deepseek-chat, deepseek-reasoner, deepseek-v3</li><li>**groq** -- llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768</li><li>**mistral** -- mistral-small-latest, mistral-medium-latest, mistral-large-latest</li><li>**openrouter** -- Any model available on OpenRouter</li><li>**perplexity** -- sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro</li><li>**together** -- Llama-3.1-70B-Instruct-Turbo, Qwen2.5-72B-Instruct-Turbo</li><li>**fireworks** -- llama-v3p1-8b-instruct, qwen2p5-72b-instruct</li><li>**moonshot** -- moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k</li><li>**xai** -- grok-2-latest, grok-2-mini-latest, grok-beta</li></ul>
+<ul><li><strong>openai</strong> -- gpt-4.1-mini, gpt-4.1, gpt-4o, gpt-4o-mini, gpt-5-mini</li><li><strong>copilot</strong> -- GitHub Copilot via OAuth device flow</li><li><strong>deepseek</strong> -- deepseek-chat, deepseek-reasoner, deepseek-v3</li><li><strong>groq</strong> -- llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768</li><li><strong>mistral</strong> -- mistral-small-latest, mistral-medium-latest, mistral-large-latest</li><li><strong>openrouter</strong> -- Any model available on OpenRouter</li><li><strong>perplexity</strong> -- sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro</li><li><strong>together</strong> -- Llama-3.1-70B-Instruct-Turbo, Qwen2.5-72B-Instruct-Turbo</li><li><strong>fireworks</strong> -- llama-v3p1-8b-instruct, qwen2p5-72b-instruct</li><li><strong>moonshot</strong> -- moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k</li><li><strong>xai</strong> -- grok-2-latest, grok-2-mini-latest, grok-beta</li></ul>
 <h3 id="file-and-image-attachments">File and Image Attachments</h3>
 <p>Attach files and images as context for the AI:</p>
 <pre><code class="language-bash">node agent.js -m &quot;Review this file&quot; --file src/app.ts
@@ -165,22 +169,22 @@ Options:
 <a href="#requirements">Requirements</a>
 <a href="#installation">Installation</a>
 <a href="#configure-a-provider">Configure a Provider</a>
-<a style="padding-left:12px" href="#direct-provider-setup">Direct Provider Setup</a>
-<a style="padding-left:12px" href="#copilot-setup">Copilot Setup</a>
+<a class="sub-item" href="#direct-provider-setup">Direct Provider Setup</a>
+<a class="sub-item" href="#copilot-setup">Copilot Setup</a>
 <a href="#first-run">First Run</a>
 <a href="#concepts">Concepts</a>
-<a style="padding-left:12px" href="#tool-calling">Tool Calling</a>
-<a style="padding-left:12px" href="#security-modes">Security Modes</a>
-<a style="padding-left:12px" href="#approval-modes">Approval Modes</a>
-<a style="padding-left:12px" href="#tools-modes">Tools Modes</a>
-<a style="padding-left:12px" href="#providers">Providers</a>
-<a style="padding-left:12px" href="#file-and-image-attachments">File and Image Attachments</a>
+<a class="sub-item" href="#tool-calling">Tool Calling</a>
+<a class="sub-item" href="#security-modes">Security Modes</a>
+<a class="sub-item" href="#approval-modes">Approval Modes</a>
+<a class="sub-item" href="#tools-modes">Tools Modes</a>
+<a class="sub-item" href="#providers">Providers</a>
+<a class="sub-item" href="#file-and-image-attachments">File and Image Attachments</a>
 <a href="#usage-examples">Usage Examples</a>
-<a style="padding-left:12px" href="#explore-a-codebase">Explore a codebase</a>
-<a style="padding-left:12px" href="#run-tests-and-analyze-failures">Run tests and analyze failures</a>
-<a style="padding-left:12px" href="#review-a-specific-file">Review a specific file</a>
-<a style="padding-left:12px" href="#use-different-providers-for-different-tasks">Use different providers for different tasks</a>
-<a style="padding-left:12px" href="#json-output-for-scripting">JSON output for scripting</a>
+<a class="sub-item" href="#explore-a-codebase">Explore a codebase</a>
+<a class="sub-item" href="#run-tests-and-analyze-failures">Run tests and analyze failures</a>
+<a class="sub-item" href="#review-a-specific-file">Review a specific file</a>
+<a class="sub-item" href="#use-different-providers-for-different-tasks">Use different providers for different tasks</a>
+<a class="sub-item" href="#json-output-for-scripting">JSON output for scripting</a>
 <a href="#cli-reference">CLI Reference</a>
 <a href="#troubleshooting">Troubleshooting</a></nav>
       </aside>

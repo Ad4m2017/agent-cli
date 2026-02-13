@@ -23,7 +23,7 @@
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle Theme"><svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               <option value="../config-reference.html">🇺🇸 English</option>
 <option value="./config-reference.html" selected>🇩🇪 Deutsch</option>
@@ -109,6 +109,8 @@
     }
   }
 }</code></pre>
+<p>Optionale Provider-Felder aus dem Connect-Wizard:</p>
+<ul><li><code>enabledModels</code> (<code>string[]</code>) -- im Wizard ausgewaehlte Model-Allowlist</li><li><code>authMethod</code> (<code>string</code>, optional) -- Metadaten zur Credential-Provisionierung</li></ul>
 <p>Felder:</p>
 <ul><li><code>kind</code> (<code>string</code>) -- Immer <code>&quot;openai_compatible&quot;</code> fuer API-Key-Provider.</li><li><code>baseUrl</code> (<code>string</code>) -- Provider API Base-URL.</li><li><code>apiKey</code> (<code>string</code>) -- Dein API-Key.</li></ul>
 <h3 id="github-copilot-provider-beispiel">GitHub Copilot Provider-Beispiel</h3>
@@ -185,6 +187,8 @@ node agent.js -m &quot;Hallo&quot; --model openai/gpt-4.1</code></pre>
 <ol><li>CLI-Flags (<code>--model</code>, <code>--mode</code>, <code>--approval</code>, <code>--tools</code>, <code>--unsafe</code>)</li><li>Umgebungsvariablen (<code>AGENT_MODEL</code>, <code>AGENT_MODE</code>, <code>AGENT_APPROVAL</code>, <code>AGENT_API_KEY</code>, <code>AGENT_COMMAND_TIMEOUT</code>, <code>AGENT_ALLOW_INSECURE_HTTP</code>)</li><li><code>agent.json</code> Runtime-Defaults</li><li><code>agent.auth.json</code> Defaults (<code>defaultProvider</code>, <code>defaultModel</code>)</li><li>Hardcodierte Fallbacks (<code>gpt-4.1-mini</code>, <code>build</code>, <code>ask</code>, <code>auto</code>)</li></ol>
 <p>Aufloesung der Konfigurationspfade:</p>
 <ul><li><code>--config &lt;pfad&gt;</code> ueberschreibt den Standard <code>./agent.json</code></li><li><code>--auth-config &lt;pfad&gt;</code> ueberschreibt den Standard <code>./agent.auth.json</code></li></ul>
+<p>models.dev Integration in <code>agent-connect.js</code>:</p>
+<ul><li>Optionales Fallback fuer Model-Discovery wenn <code>/models</code> nicht verfuegbar ist</li><li>Optionaler Provider-Import-Flow: <code>Load provider from models.dev...</code></li><li>Importierte Provider nutzen die Registry-<code>api</code> URL als initiale <code>baseUrl</code></li></ul>
         </article>
       </main>
       <aside class="right">
@@ -192,20 +196,20 @@ node agent.js -m &quot;Hallo&quot; --model openai/gpt-4.1</code></pre>
         <nav class="toc"><a href="#ueberblick">Ueberblick</a>
 <a href="#doku-neu-bauen">Doku neu bauen</a>
 <a href="#agentjson">agent.json</a>
-<a style="padding-left:12px" href="#vollstaendiges-beispiel">Vollstaendiges Beispiel</a>
-<a style="padding-left:12px" href="#runtime">runtime</a>
-<a style="padding-left:12px" href="#security">security</a>
-<a style="padding-left:12px" href="#securitymodesmode">security.modes.&lt;mode&gt;</a>
-<a style="padding-left:12px" href="#regel-matching">Regel-Matching</a>
-<a style="padding-left:12px" href="#entscheidungsreihenfolge">Entscheidungsreihenfolge</a>
+<a class="sub-item" href="#vollstaendiges-beispiel">Vollstaendiges Beispiel</a>
+<a class="sub-item" href="#runtime">runtime</a>
+<a class="sub-item" href="#security">security</a>
+<a class="sub-item" href="#securitymodesmode">security.modes.&lt;mode&gt;</a>
+<a class="sub-item" href="#regel-matching">Regel-Matching</a>
+<a class="sub-item" href="#entscheidungsreihenfolge">Entscheidungsreihenfolge</a>
 <a href="#agentauthjson">agent.auth.json</a>
-<a style="padding-left:12px" href="#openai-kompatibles-provider-beispiel">OpenAI-kompatibles Provider-Beispiel</a>
-<a style="padding-left:12px" href="#github-copilot-provider-beispiel">GitHub Copilot Provider-Beispiel</a>
-<a style="padding-left:12px" href="#mehrere-provider">Mehrere Provider</a>
-<a style="padding-left:12px" href="#token-refresh">Token-Refresh</a>
+<a class="sub-item" href="#openai-kompatibles-provider-beispiel">OpenAI-kompatibles Provider-Beispiel</a>
+<a class="sub-item" href="#github-copilot-provider-beispiel">GitHub Copilot Provider-Beispiel</a>
+<a class="sub-item" href="#mehrere-provider">Mehrere Provider</a>
+<a class="sub-item" href="#token-refresh">Token-Refresh</a>
 <a href="#error-code-referenz">Error-Code-Referenz</a>
-<a style="padding-left:12px" href="#agentjs-fehler">agent.js Fehler</a>
-<a style="padding-left:12px" href="#agent-connectjs-fehler">agent-connect.js Fehler</a>
+<a class="sub-item" href="#agentjs-fehler">agent.js Fehler</a>
+<a class="sub-item" href="#agent-connectjs-fehler">agent-connect.js Fehler</a>
 <a href="#exit-codes">Exit-Codes</a>
 <a href="#cli-prioritaet">CLI-Prioritaet</a></nav>
       </aside>

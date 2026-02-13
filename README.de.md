@@ -78,6 +78,13 @@ node agent-connect.js
 
 Der interaktive Wizard laesst dich einen Provider waehlen, deinen API-Key eingeben und Defaults setzen. Im TTY-Terminal: Pfeiltasten + Enter zur Navigation.
 
+Wizard-Highlights in `v1.1.0`:
+- Provider-Statuslabels (`installed`, `installed, default`, `not configured`)
+- Schnellaktion `Set default provider/model only` (ohne komplettes Re-Setup)
+- Optionales Model-Refresh aus `/models` mit Fallback auf `models.dev`
+- `Load provider from models.dev...` fuer zusaetzliche OpenAI-kompatible Provider (API-URL + Model-Kandidaten)
+- Geseitete Menues bei langen Listen (`n`/`p` springt um 10)
+
 Oder direkt konfigurieren:
 
 ```bash
@@ -199,8 +206,8 @@ cat prompt.txt | node agent.js --approval auto
 ```text
 node agent-connect.js [--provider <name>] [optionen]
 
-Provider: copilot, deepseek, fireworks, groq, mistral,
-          moonshot, openai, openrouter, perplexity, together, xai
+Provider: copilot, custom, deepseek, fireworks, groq, lmstudio,
+          mistral, moonshot, ollama, openai, openrouter, perplexity, together, xai
 
 Optionen:
   --provider <name>  Provider ohne Menue waehlen

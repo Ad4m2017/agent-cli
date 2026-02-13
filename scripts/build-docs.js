@@ -38,6 +38,7 @@ function slugify(text) {
 function inlineFormat(text) {
   const escaped = escapeHtml(text);
   return escaped
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 }
@@ -147,8 +148,8 @@ function renderPage({ page, bodyHtml, pageToc, lang }) {
 
   const tocHtml = pageToc
     .map((item) => {
-      const padding = item.level === 3 ? " style=\"padding-left:12px\"" : "";
-      return `<a${padding} href="#${item.id}">${escapeHtml(item.text)}</a>`;
+      const cls = item.level === 3 ? ' class="sub-item"' : "";
+      return `<a${cls} href="#${item.id}">${escapeHtml(item.text)}</a>`;
     })
     .join("\n");
 
@@ -192,7 +193,7 @@ function renderPage({ page, bodyHtml, pageToc, lang }) {
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle Theme"><svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               ${langOptions}
             </select>

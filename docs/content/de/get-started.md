@@ -54,6 +54,15 @@ Im TTY-Terminal: Pfeiltasten und Enter zur Navigation. Der Wizard schreibt:
 - Runtime-Defaults und Sicherheitsrichtlinie in `agent.json`
 - Provider-Credentials in `agent.auth.json` (Klartext, Dateiberechtigungen auf 0600 gesetzt)
 
+Wizard-Verhalten beinhaltet:
+
+- Provider-Statuslabels (`installed`, `installed, default`, `not configured`)
+- Top-Level-Schnellaktion: `Set default provider/model only`
+- Optionales Model-Refresh via live Provider-Endpoint `/models`
+- Optionales Fallback-Model-Loading von `models.dev`
+- Provider-Quelle: `Load provider from models.dev...` (importiert Provider-API-URL und Model-Kandidaten)
+- Paged-Navigation fuer lange Listen (`n`/`p` springt um 10)
+
 Konfigurationsdateien werden jetzt atomar geschrieben (Temp-Datei + Rename), um das Risiko beschaedigter JSON-Dateien bei Abbruch waehrend des Schreibens zu reduzieren.
 
 ### Direktes Provider-Setup
@@ -70,6 +79,8 @@ node agent-connect.js --provider together
 node agent-connect.js --provider fireworks
 node agent-connect.js --provider moonshot
 node agent-connect.js --provider xai
+node agent-connect.js --provider ollama
+node agent-connect.js --provider lmstudio
 ```
 
 ### Copilot-Setup

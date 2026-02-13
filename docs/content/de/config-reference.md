@@ -129,6 +129,11 @@ Diese Datei speichert Provider-Credentials. Dateiberechtigungen werden auf `0600
 }
 ```
 
+Optionale Provider-Felder aus dem Connect-Wizard:
+
+- `enabledModels` (`string[]`) -- im Wizard ausgewaehlte Model-Allowlist
+- `authMethod` (`string`, optional) -- Metadaten zur Credential-Provisionierung
+
 Felder:
 
 - `kind` (`string`) -- Immer `"openai_compatible"` fuer API-Key-Provider.
@@ -296,3 +301,9 @@ Aufloesung der Konfigurationspfade:
 
 - `--config <pfad>` ueberschreibt den Standard `./agent.json`
 - `--auth-config <pfad>` ueberschreibt den Standard `./agent.auth.json`
+
+models.dev Integration in `agent-connect.js`:
+
+- Optionales Fallback fuer Model-Discovery wenn `/models` nicht verfuegbar ist
+- Optionaler Provider-Import-Flow: `Load provider from models.dev...`
+- Importierte Provider nutzen die Registry-`api` URL als initiale `baseUrl`

@@ -129,6 +129,11 @@ This file stores provider credentials. File permissions are set to `0600` (owner
 }
 ```
 
+Optional per-provider fields used by the connect wizard:
+
+- `enabledModels` (`string[]`) -- model allow-list selected in the wizard
+- `authMethod` (`string`, optional) -- metadata for how credentials were provisioned
+
 Fields:
 
 - `kind` (`string`) -- Always `"openai_compatible"` for API key providers.
@@ -296,3 +301,9 @@ Config file path resolution:
 
 - `--config <path>` overrides the default `./agent.json`
 - `--auth-config <path>` overrides the default `./agent.auth.json`
+
+models.dev integration in `agent-connect.js`:
+
+- Optional fallback for model discovery when `/models` is unavailable
+- Optional provider import flow: `Load provider from models.dev...`
+- Imported providers use the registry `api` URL as initial `baseUrl`

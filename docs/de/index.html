@@ -23,7 +23,7 @@
           </div>
           <div class="controls">
             <button id="nav-toggle" class="mobile-toggle">Menu</button>
-            <button id="theme-toggle">Toggle Theme</button>
+            <button id="theme-toggle" aria-label="Toggle Theme"><svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
             <select id="lang-switch" class="lang-select" aria-label="Select language">
               <option value="../index.html">🇺🇸 English</option>
 <option value="./index.html" selected>🇩🇪 Deutsch</option>
@@ -34,7 +34,7 @@
 <h1 id="agent-cli-dokumentation">Agent CLI Dokumentation</h1>
 <p>Ein Zero-Dependency, Multi-Provider KI-Agent fuer das Terminal. Keine Frameworks, keine Server, keine Datenbanken -- nur Node.js und dein bevorzugter KI-Anbieter.</p>
 <h2 id="warum-agent-cli">Warum agent-cli?</h2>
-<ul><li>**Zero Dependencies** -- kein <code>node_modules</code>, kein Supply-Chain-Risiko</li><li>**11 Provider** -- Anbieter wechseln mit einer Config-Aenderung</li><li>**Security-first** -- konfigurierbare Befehlsrichtlinien verhindern destruktive Operationen</li><li>**Laeuft ueberall** -- SSH, Container, CI, Remote-Server</li><li>**Lokale Config** -- Credentials bleiben auf deinem Rechner</li></ul>
+<ul><li><strong>Zero Dependencies</strong> -- kein <code>node_modules</code>, kein Supply-Chain-Risiko</li><li><strong>11 Provider</strong> -- Anbieter wechseln mit einer Config-Aenderung</li><li><strong>Security-first</strong> -- konfigurierbare Befehlsrichtlinien verhindern destruktive Operationen</li><li><strong>Laeuft ueberall</strong> -- SSH, Container, CI, Remote-Server</li><li><strong>Lokale Config</strong> -- Credentials bleiben auf deinem Rechner</li></ul>
 <h2 id="wie-es-funktioniert">Wie es funktioniert</h2>
 <p>agent-cli sendet deinen Prompt an ein KI-Modell ueber die OpenAI-kompatible Chat-Completions-API. Das Modell kann mit reinem Text antworten oder Tool-Calls anfordern. Aktuell unterstuetzt der Agent ein Tool: <code>run_command</code>, das Shell-Befehle ausfuehrt.</p>
 <p>Die Ausfuehrung folgt einer agentischen Schleife:</p>
@@ -51,6 +51,8 @@ cd agent-cli</code></pre>
 <pre><code class="language-bash">node agent-connect.js</code></pre>
 <p>Im TTY-Terminal: Pfeiltasten und Enter zur Navigation. Der Wizard schreibt:</p>
 <ul><li>Runtime-Defaults und Sicherheitsrichtlinie in <code>agent.json</code></li><li>Provider-Credentials in <code>agent.auth.json</code> (Klartext, Dateiberechtigungen auf 0600 gesetzt)</li></ul>
+<p>Wizard-Verhalten beinhaltet:</p>
+<ul><li>Provider-Statuslabels (<code>installed</code>, <code>installed, default</code>, <code>not configured</code>)</li><li>Top-Level-Schnellaktion: <code>Set default provider/model only</code></li><li>Optionales Model-Refresh via live Provider-Endpoint <code>/models</code></li><li>Optionales Fallback-Model-Loading von <code>models.dev</code></li><li>Provider-Quelle: <code>Load provider from models.dev...</code> (importiert Provider-API-URL und Model-Kandidaten)</li><li>Paged-Navigation fuer lange Listen (<code>n</code>/<code>p</code> springt um 10)</li></ul>
 <p>Konfigurationsdateien werden jetzt atomar geschrieben (Temp-Datei + Rename), um das Risiko beschaedigter JSON-Dateien bei Abbruch waehrend des Schreibens zu reduzieren.</p>
 <h3 id="direktes-provider-setup">Direktes Provider-Setup</h3>
 <pre><code class="language-bash">node agent-connect.js --provider openai
@@ -63,7 +65,9 @@ node agent-connect.js --provider perplexity
 node agent-connect.js --provider together
 node agent-connect.js --provider fireworks
 node agent-connect.js --provider moonshot
-node agent-connect.js --provider xai</code></pre>
+node agent-connect.js --provider xai
+node agent-connect.js --provider ollama
+node agent-connect.js --provider lmstudio</code></pre>
 <h3 id="copilot-setup">Copilot-Setup</h3>
 <p>GitHub Copilot nutzt den OAuth Device Flow. Der Wizard wird:</p>
 <ol><li>Einen Device-Code generieren</li><li>Dich auffordern, eine URL im Browser zu oeffnen</li><li>Den Code auf GitHub einzugeben</li><li>Automatisch Tokens austauschen, sobald bestaetigt</li></ol>
@@ -81,23 +85,23 @@ node agent.js -m &quot;Erklaere diesen Fehler&quot; --model groq/llama-3.3-70b-v
 <p>Die Schleife laeuft fuer bis zu 5 Runden, bevor der Agent eine finale Textantwort erzwingt.</p>
 <h3 id="sicherheitsmodi">Sicherheitsmodi</h3>
 <p>Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine dreischichtige Sicherheitsrichtlinie in <code>agent.json</code> geprueft:</p>
-<p>**Schicht 1: denyCritical** -- blockiert immer katastrophale Befehle, unabhaengig vom Modus:</p>
+<p><strong>Schicht 1: denyCritical</strong> -- blockiert immer katastrophale Befehle, unabhaengig vom Modus:</p>
 <ul><li><code>rm -rf /</code></li><li><code>mkfs</code></li><li><code>shutdown</code>, <code>reboot</code>, <code>poweroff</code></li><li><code>dd if=</code></li><li>Pipen von curl/wget in sh/bash</li></ul>
-<p>**Schicht 2: Modusspezifische Deny-Regeln** -- blockiert Befehle basierend auf dem aktuellen Modus.</p>
-<p>**Schicht 3: Modusspezifische Allow-Regeln** -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.</p>
+<p><strong>Schicht 2: Modusspezifische Deny-Regeln</strong> -- blockiert Befehle basierend auf dem aktuellen Modus.</p>
+<p><strong>Schicht 3: Modusspezifische Allow-Regeln</strong> -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.</p>
 <p>Auswertungsreihenfolge: denyCritical -&gt; deny -&gt; allow. Ein Befehl muss alle drei Schichten bestehen.</p>
 <p>Die drei Modi:</p>
-<ul><li>**plan** -- Nur-Lesen-Erkundung. Nur <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> erlaubt. Destruktive Befehle, Paketinstallationen und Pushes sind blockiert.</li><li>**build** (Standard) -- Normale Entwicklung. Git, Node.js, npm, Python, Docker, Make sind erlaubt. <code>rm</code>, <code>sudo</code> und System-Level-Befehle sind blockiert.</li><li>**unsafe** -- Breiter Umfang. Alle Befehle erlaubt ausser <code>denyCritical</code>-Eintraege. Mit Vorsicht verwenden.</li></ul>
+<ul><li><strong>plan</strong> -- Nur-Lesen-Erkundung. Nur <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> erlaubt. Destruktive Befehle, Paketinstallationen und Pushes sind blockiert.</li><li><strong>build</strong> (Standard) -- Normale Entwicklung. Git, Node.js, npm, Python, Docker, Make sind erlaubt. <code>rm</code>, <code>sudo</code> und System-Level-Befehle sind blockiert.</li><li><strong>unsafe</strong> -- Breiter Umfang. Alle Befehle erlaubt ausser <code>denyCritical</code>-Eintraege. Mit Vorsicht verwenden.</li></ul>
 <h3 id="freigabemodi-approval">Freigabemodi (Approval)</h3>
 <p>Steuert das Human-in-the-Loop-Verhalten fuer die Befehlsausfuehrung:</p>
-<ul><li>**ask** (Standard) -- Der Agent fragt vor jedem Befehl: <code>Approve? [y/N]</code>. Erfordert ein TTY-Terminal. Das ist der sicherste Modus fuer interaktive Nutzung.</li><li>**auto** -- Fuehrt richtlinienkonforme Befehle sofort ohne Nachfrage aus. Erforderlich fuer CI/CD und Scripting. Mit <code>--json</code> fuer Automation verwenden.</li><li>**never** -- Blockiert jede Befehlsausfuehrung. Die KI kann nur mit Text antworten, nie Befehle ausfuehren.</li></ul>
+<ul><li><strong>ask</strong> (Standard) -- Der Agent fragt vor jedem Befehl: <code>Approve? [y/N]</code>. Erfordert ein TTY-Terminal. Das ist der sicherste Modus fuer interaktive Nutzung.</li><li><strong>auto</strong> -- Fuehrt richtlinienkonforme Befehle sofort ohne Nachfrage aus. Erforderlich fuer CI/CD und Scripting. Mit <code>--json</code> fuer Automation verwenden.</li><li><strong>never</strong> -- Blockiert jede Befehlsausfuehrung. Die KI kann nur mit Text antworten, nie Befehle ausfuehren.</li></ul>
 <h3 id="tools-modi">Tools-Modi</h3>
 <p>Steuert, ob Tool-Calling-Payloads in API-Anfragen enthalten sind:</p>
-<ul><li>**auto** (Standard) -- Sendet Tool-Definitionen an das Modell. Wenn das Modell sie ablehnt (z.B. Perplexity-Modelle), automatischer Retry ohne Tools.</li><li>**on** -- Sendet immer Tool-Definitionen. Gibt <code>TOOLS_NOT_SUPPORTED</code>-Fehler zurueck wenn das Modell sie nicht verarbeiten kann.</li><li>**off** -- Sendet nie Tool-Definitionen. Die KI antwortet nur mit Text.</li></ul>
+<ul><li><strong>auto</strong> (Standard) -- Sendet Tool-Definitionen an das Modell. Wenn das Modell sie ablehnt (z.B. Perplexity-Modelle), automatischer Retry ohne Tools.</li><li><strong>on</strong> -- Sendet immer Tool-Definitionen. Gibt <code>TOOLS_NOT_SUPPORTED</code>-Fehler zurueck wenn das Modell sie nicht verarbeiten kann.</li><li><strong>off</strong> -- Sendet nie Tool-Definitionen. Die KI antwortet nur mit Text.</li></ul>
 <p><code>--no-tools</code> als Abkuerzung fuer <code>--tools off</code> verwenden.</p>
 <h3 id="provider">Provider</h3>
 <p>Alle Provider ausser Copilot nutzen den Standard-OpenAI-kompatiblen <code>/chat/completions</code>-Endpoint. Das bedeutet: jeder OpenAI-kompatible Dienst funktioniert.</p>
-<ul><li>**openai** -- gpt-4.1-mini, gpt-4.1, gpt-4o, gpt-4o-mini, gpt-5-mini</li><li>**copilot** -- GitHub Copilot via OAuth Device Flow</li><li>**deepseek** -- deepseek-chat, deepseek-reasoner, deepseek-v3</li><li>**groq** -- llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768</li><li>**mistral** -- mistral-small-latest, mistral-medium-latest, mistral-large-latest</li><li>**openrouter** -- Jedes auf OpenRouter verfuegbare Modell</li><li>**perplexity** -- sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro</li><li>**together** -- Llama-3.1-70B-Instruct-Turbo, Qwen2.5-72B-Instruct-Turbo</li><li>**fireworks** -- llama-v3p1-8b-instruct, qwen2p5-72b-instruct</li><li>**moonshot** -- moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k</li><li>**xai** -- grok-2-latest, grok-2-mini-latest, grok-beta</li></ul>
+<ul><li><strong>openai</strong> -- gpt-4.1-mini, gpt-4.1, gpt-4o, gpt-4o-mini, gpt-5-mini</li><li><strong>copilot</strong> -- GitHub Copilot via OAuth Device Flow</li><li><strong>deepseek</strong> -- deepseek-chat, deepseek-reasoner, deepseek-v3</li><li><strong>groq</strong> -- llama-3.3-70b-versatile, llama-3.1-8b-instant, mixtral-8x7b-32768</li><li><strong>mistral</strong> -- mistral-small-latest, mistral-medium-latest, mistral-large-latest</li><li><strong>openrouter</strong> -- Jedes auf OpenRouter verfuegbare Modell</li><li><strong>perplexity</strong> -- sonar, sonar-pro, sonar-reasoning, sonar-reasoning-pro</li><li><strong>together</strong> -- Llama-3.1-70B-Instruct-Turbo, Qwen2.5-72B-Instruct-Turbo</li><li><strong>fireworks</strong> -- llama-v3p1-8b-instruct, qwen2p5-72b-instruct</li><li><strong>moonshot</strong> -- moonshot-v1-8k, moonshot-v1-32k, moonshot-v1-128k</li><li><strong>xai</strong> -- grok-2-latest, grok-2-mini-latest, grok-beta</li></ul>
 <h3 id="datei--und-bild-anhaenge">Datei- und Bild-Anhaenge</h3>
 <p>Dateien und Bilder als Kontext fuer die KI anhaengen:</p>
 <pre><code class="language-bash">node agent.js -m &quot;Pruefe diese Datei&quot; --file src/app.ts
@@ -165,22 +169,22 @@ Optionen:
 <a href="#voraussetzungen">Voraussetzungen</a>
 <a href="#installation">Installation</a>
 <a href="#provider-konfigurieren">Provider konfigurieren</a>
-<a style="padding-left:12px" href="#direktes-provider-setup">Direktes Provider-Setup</a>
-<a style="padding-left:12px" href="#copilot-setup">Copilot-Setup</a>
+<a class="sub-item" href="#direktes-provider-setup">Direktes Provider-Setup</a>
+<a class="sub-item" href="#copilot-setup">Copilot-Setup</a>
 <a href="#erster-start">Erster Start</a>
 <a href="#konzepte">Konzepte</a>
-<a style="padding-left:12px" href="#tool-calling">Tool-Calling</a>
-<a style="padding-left:12px" href="#sicherheitsmodi">Sicherheitsmodi</a>
-<a style="padding-left:12px" href="#freigabemodi-approval">Freigabemodi (Approval)</a>
-<a style="padding-left:12px" href="#tools-modi">Tools-Modi</a>
-<a style="padding-left:12px" href="#provider">Provider</a>
-<a style="padding-left:12px" href="#datei--und-bild-anhaenge">Datei- und Bild-Anhaenge</a>
+<a class="sub-item" href="#tool-calling">Tool-Calling</a>
+<a class="sub-item" href="#sicherheitsmodi">Sicherheitsmodi</a>
+<a class="sub-item" href="#freigabemodi-approval">Freigabemodi (Approval)</a>
+<a class="sub-item" href="#tools-modi">Tools-Modi</a>
+<a class="sub-item" href="#provider">Provider</a>
+<a class="sub-item" href="#datei--und-bild-anhaenge">Datei- und Bild-Anhaenge</a>
 <a href="#anwendungsbeispiele">Anwendungsbeispiele</a>
-<a style="padding-left:12px" href="#codebase-erkunden">Codebase erkunden</a>
-<a style="padding-left:12px" href="#tests-ausfuehren-und-fehler-analysieren">Tests ausfuehren und Fehler analysieren</a>
-<a style="padding-left:12px" href="#bestimmte-datei-reviewen">Bestimmte Datei reviewen</a>
-<a style="padding-left:12px" href="#verschiedene-provider-fuer-verschiedene-aufgaben">Verschiedene Provider fuer verschiedene Aufgaben</a>
-<a style="padding-left:12px" href="#json-ausgabe-fuer-scripting">JSON-Ausgabe fuer Scripting</a>
+<a class="sub-item" href="#codebase-erkunden">Codebase erkunden</a>
+<a class="sub-item" href="#tests-ausfuehren-und-fehler-analysieren">Tests ausfuehren und Fehler analysieren</a>
+<a class="sub-item" href="#bestimmte-datei-reviewen">Bestimmte Datei reviewen</a>
+<a class="sub-item" href="#verschiedene-provider-fuer-verschiedene-aufgaben">Verschiedene Provider fuer verschiedene Aufgaben</a>
+<a class="sub-item" href="#json-ausgabe-fuer-scripting">JSON-Ausgabe fuer Scripting</a>
 <a href="#cli-referenz">CLI-Referenz</a>
 <a href="#fehlerbehebung">Fehlerbehebung</a></nav>
       </aside>
