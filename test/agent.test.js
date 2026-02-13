@@ -965,10 +965,14 @@ describe("resolveCommandTimeoutMs", () => {
 describe("isLocalOrPrivateHttpHost", () => {
   it("accepts localhost and private ranges", () => {
     assert.equal(isLocalOrPrivateHttpHost("localhost"), true);
+    assert.equal(isLocalOrPrivateHttpHost("api.localhost"), true);
     assert.equal(isLocalOrPrivateHttpHost("127.0.0.1"), true);
+    assert.equal(isLocalOrPrivateHttpHost("::1"), true);
     assert.equal(isLocalOrPrivateHttpHost("10.0.0.5"), true);
     assert.equal(isLocalOrPrivateHttpHost("172.16.10.20"), true);
     assert.equal(isLocalOrPrivateHttpHost("192.168.1.12"), true);
+    assert.equal(isLocalOrPrivateHttpHost("fd12:3456::1"), true);
+    assert.equal(isLocalOrPrivateHttpHost("fe80::1234"), true);
   });
 
   it("rejects public hostnames", () => {
@@ -999,6 +1003,13 @@ describe("validateProviderBaseUrl", () => {
   it("throws INVALID_BASE_URL for malformed URLs", () => {
     assert.throws(
       () => validateProviderBaseUrl("not-a-url", {}, "openai"),
+      (err) => err && err.code === ERROR_CODES.INVALID_BASE_URL
+    );
+  });
+
+  it("throws INVALID_BASE_URL for unsupported protocols", () => {
+    assert.throws(
+      () => validateProviderBaseUrl("ftp://example.com/v1", {}, "openai"),
       (err) => err && err.code === ERROR_CODES.INVALID_BASE_URL
     );
   });
@@ -1426,11 +1437,35 @@ describe("applyEnvOverrides", () => {
     }
   });
 
+  it("CLI timeout takes priority over AGENT_COMMAND_TIMEOUT", () => {
+    const original = process.env.AGENT_COMMAND_TIMEOUT;
+    try {
+      process.env.AGENT_COMMAND_TIMEOUT = "25000";
+      const result = applyEnvOverrides({ commandTimeoutMs: 5000 });
+      assert.equal(result.commandTimeoutMs, 5000);
+    } finally {
+      if (original === undefined) delete process.env.AGENT_COMMAND_TIMEOUT;
+      else process.env.AGENT_COMMAND_TIMEOUT = original;
+    }
+  });
+
   it("applies AGENT_ALLOW_INSECURE_HTTP when CLI flag is false", () => {
     const original = process.env.AGENT_ALLOW_INSECURE_HTTP;
     try {
       process.env.AGENT_ALLOW_INSECURE_HTTP = "true";
       const result = applyEnvOverrides({ allowInsecureHttp: false });
+      assert.equal(result.allowInsecureHttp, true);
+    } finally {
+      if (original === undefined) delete process.env.AGENT_ALLOW_INSECURE_HTTP;
+      else process.env.AGENT_ALLOW_INSECURE_HTTP = original;
+    }
+  });
+
+  it("CLI allowInsecureHttp=true remains true regardless of env", () => {
+    const original = process.env.AGENT_ALLOW_INSECURE_HTTP;
+    try {
+      process.env.AGENT_ALLOW_INSECURE_HTTP = "false";
+      const result = applyEnvOverrides({ allowInsecureHttp: true });
       assert.equal(result.allowInsecureHttp, true);
     } finally {
       if (original === undefined) delete process.env.AGENT_ALLOW_INSECURE_HTTP;

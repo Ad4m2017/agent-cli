@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.9.0";
+const AGENT_VERSION = "1.0.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -722,8 +722,17 @@ function resolveCommandTimeoutMs(opts, agentConfig) {
 function isLocalOrPrivateHttpHost(hostname) {
   const host = (hostname || "").toLowerCase();
   if (!host) return false;
-  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+  if (host === "localhost" || host.endsWith(".localhost") || host === "127.0.0.1" || host === "::1") return true;
   if (host.endsWith(".local")) return true;
+
+  // IPv6 local ranges:
+  // - loopback: ::1
+  // - unique local addresses: fc00::/7 (fcxx and fdxx)
+  // - link-local addresses: fe80::/10
+  if (host.includes(":")) {
+    if (host.startsWith("fc") || host.startsWith("fd")) return true;
+    if (host.startsWith("fe8") || host.startsWith("fe9") || host.startsWith("fea") || host.startsWith("feb")) return true;
+  }
 
   const parts = host.split(".");
   if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {

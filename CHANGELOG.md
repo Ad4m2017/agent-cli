@@ -4,6 +4,27 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.0.0] - 2026-02-13
+
+### Added
+- v1.0 release hardening checks across critical runtime paths (config I/O, provider runtime creation, tool execution, stdin flow)
+- Extended local-model HTTP policy support in `agent.js`:
+  - accepts `.localhost` hostnames
+  - accepts local IPv6 ranges (`::1`, `fc00::/7`, `fe80::/10`)
+- Additional regression tests for:
+  - environment override precedence (`AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`)
+  - local/private host detection edge cases
+  - unsupported URL protocol rejection in base URL validation
+
+### Changed
+- Version bumped from `0.9.0` to `1.0.0` in `agent.js`, `agent-connect.js`, and `package.json`
+- README version references updated (EN/DE)
+- Test count increased from 231 to 234
+
+### Notes
+- Zero-dependency architecture remains unchanged (Node.js built-ins only)
+- Existing CLI behavior remains backward compatible; 1.0 focuses on stability and production readiness
+
 ## [0.9.0] - 2026-02-13
 
 ### Added
