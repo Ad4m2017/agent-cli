@@ -305,7 +305,7 @@ Das englische README ist verfuegbar unter [README.md](README.md).
 
 ## Version
 
-Aktuelle Version: `0.7.0` -- siehe [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: `0.8.0` -- siehe [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 

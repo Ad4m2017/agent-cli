@@ -51,6 +51,7 @@ cd agent-cli</code></pre>
 <pre><code class="language-bash">node agent-connect.js</code></pre>
 <p>In TTY terminals, use arrow keys and Enter to navigate menus. The wizard writes:</p>
 <ul><li>Runtime defaults and security policy to <code>agent.json</code></li><li>Provider credentials to <code>agent.auth.json</code> (plaintext, file permissions set to 0600)</li></ul>
+<p>Config files are now written atomically (temp file + rename) to reduce risk of corrupted JSON if a process is interrupted during write.</p>
 <h3 id="direct-provider-setup">Direct Provider Setup</h3>
 <pre><code class="language-bash">node agent-connect.js --provider openai
 node agent-connect.js --provider copilot

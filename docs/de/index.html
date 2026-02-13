@@ -51,6 +51,7 @@ cd agent-cli</code></pre>
 <pre><code class="language-bash">node agent-connect.js</code></pre>
 <p>Im TTY-Terminal: Pfeiltasten und Enter zur Navigation. Der Wizard schreibt:</p>
 <ul><li>Runtime-Defaults und Sicherheitsrichtlinie in <code>agent.json</code></li><li>Provider-Credentials in <code>agent.auth.json</code> (Klartext, Dateiberechtigungen auf 0600 gesetzt)</li></ul>
+<p>Konfigurationsdateien werden jetzt atomar geschrieben (Temp-Datei + Rename), um das Risiko beschaedigter JSON-Dateien bei Abbruch waehrend des Schreibens zu reduzieren.</p>
 <h3 id="direktes-provider-setup">Direktes Provider-Setup</h3>
 <pre><code class="language-bash">node agent-connect.js --provider openai
 node agent-connect.js --provider copilot

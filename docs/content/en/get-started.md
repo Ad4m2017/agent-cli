@@ -54,6 +54,8 @@ In TTY terminals, use arrow keys and Enter to navigate menus. The wizard writes:
 - Runtime defaults and security policy to `agent.json`
 - Provider credentials to `agent.auth.json` (plaintext, file permissions set to 0600)
 
+Config files are now written atomically (temp file + rename) to reduce risk of corrupted JSON if a process is interrupted during write.
+
 ### Direct Provider Setup
 
 ```bash

@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.7.0";
+const AGENT_VERSION = "0.8.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -518,6 +518,7 @@ function defaultAgentConfig() {
 function loadAgentConfig(configFilePath) {
   const defaults = defaultAgentConfig();
   const filePath = configFilePath || DEFAULT_AGENT_CONFIG_FILE;
+  validateConfigPath(filePath, "agent.json", ERROR_CODES.AGENT_CONFIG_ERROR);
   if (!fs.existsSync(filePath)) return defaults;
 
   const raw = fs.readFileSync(filePath, "utf8");
@@ -552,6 +553,7 @@ function loadAgentConfig(configFilePath) {
  */
 function loadProviderConfig(authConfigFilePath) {
   const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
+  validateConfigPath(filePath, "agent.auth.json", ERROR_CODES.AUTH_CONFIG_ERROR);
   if (!fs.existsSync(filePath)) return null;
 
   const raw = fs.readFileSync(filePath, "utf8");
@@ -578,18 +580,99 @@ function loadProviderConfig(authConfigFilePath) {
  */
 function saveProviderConfig(config, authConfigFilePath) {
   const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
-  const body = `${JSON.stringify(config, null, 2)}\n`;
-  fs.writeFileSync(filePath, body, { mode: 0o600 });
-  try {
-    fs.chmodSync(filePath, 0o600);
-  } catch {
-    // skip chmod failure on unsupported platforms
-  }
+  validateConfigPath(filePath, "agent.auth.json", ERROR_CODES.AUTH_CONFIG_ERROR);
+  writeJsonAtomic(filePath, config, 0o600, ERROR_CODES.AUTH_CONFIG_ERROR, "agent.auth.json");
 }
 
 function toAbsolutePath(inputPath) {
   if (!inputPath || typeof inputPath !== "string") return "";
   return path.isAbsolute(inputPath) ? inputPath : path.resolve(process.cwd(), inputPath);
+}
+
+function validateConfigPath(filePath, displayName, errorCode) {
+  const p = String(filePath || "");
+  if (!p) {
+    const e = new Error(`Invalid ${displayName} path.`);
+    e.code = errorCode;
+    throw e;
+  }
+
+  const parent = path.dirname(p);
+  if (!fs.existsSync(parent)) {
+    const e = new Error(`Parent directory does not exist for ${displayName}: ${parent}`);
+    e.code = errorCode;
+    throw e;
+  }
+
+  let parentStat;
+  try {
+    parentStat = fs.statSync(parent);
+  } catch (err) {
+    const e = new Error(`Cannot access parent directory for ${displayName}: ${parent} (${err.message})`);
+    e.code = errorCode;
+    throw e;
+  }
+  if (!parentStat.isDirectory()) {
+    const e = new Error(`Parent path is not a directory for ${displayName}: ${parent}`);
+    e.code = errorCode;
+    throw e;
+  }
+
+  if (fs.existsSync(p)) {
+    let st;
+    try {
+      st = fs.statSync(p);
+    } catch (err) {
+      const e = new Error(`Cannot access ${displayName}: ${p} (${err.message})`);
+      e.code = errorCode;
+      throw e;
+    }
+    if (st.isDirectory()) {
+      const e = new Error(`${displayName} path points to a directory, expected a file: ${p}`);
+      e.code = errorCode;
+      throw e;
+    }
+  }
+}
+
+function writeJsonAtomic(filePath, value, mode, errorCode, displayName) {
+  const target = String(filePath);
+  const parent = path.dirname(target);
+  const base = path.basename(target);
+  const tmpName = `.${base}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  const tmpPath = path.join(parent, tmpName);
+  const body = `${JSON.stringify(value, null, 2)}\n`;
+
+  try {
+    fs.writeFileSync(tmpPath, body, { mode });
+
+    try {
+      const fd = fs.openSync(tmpPath, "r");
+      try {
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      // Some filesystems/platforms may not support fsync reliably.
+    }
+
+    fs.renameSync(tmpPath, target);
+    try {
+      fs.chmodSync(target, mode);
+    } catch {
+      // skip chmod failure on unsupported platforms
+    }
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {
+      // best-effort cleanup
+    }
+    const e = new Error(`Failed to write ${displayName}: ${err.message}`);
+    e.code = errorCode;
+    throw e;
+  }
 }
 
 /** Resolve effective config file paths from CLI options. */
@@ -1846,6 +1929,8 @@ module.exports = {
   parseCliArgs,
   applyEnvOverrides,
   resolveConfigPaths,
+  validateConfigPath,
+  writeJsonAtomic,
   redactSensitiveText,
   createLogger,
   getErrorCode,

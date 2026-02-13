@@ -5,6 +5,8 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const {
@@ -15,6 +17,8 @@ const {
   parseCliArgs,
   applyEnvOverrides,
   resolveConfigPaths,
+  validateConfigPath,
+  writeJsonAtomic,
   redactSensitiveText,
   createLogger,
   getErrorCode,
@@ -920,6 +924,76 @@ describe("resolveConfigPaths", () => {
     });
     assert.equal(resolved.agentConfigPath, "/tmp/custom-agent.json");
     assert.equal(resolved.authConfigPath, "/tmp/custom-agent.auth.json");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateConfigPath / writeJsonAtomic
+// ---------------------------------------------------------------------------
+describe("validateConfigPath", () => {
+  it("throws coded error when parent directory does not exist", () => {
+    const missing = path.join(os.tmpdir(), `agent-missing-${Date.now()}`, "agent.json");
+    assert.throws(
+      () => validateConfigPath(missing, "agent.json", ERROR_CODES.AGENT_CONFIG_ERROR),
+      (err) => {
+        assert.equal(err.code, ERROR_CODES.AGENT_CONFIG_ERROR);
+        return true;
+      }
+    );
+  });
+
+  it("throws coded error when path points to directory", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-dir-"));
+    try {
+      assert.throws(
+        () => validateConfigPath(dir, "agent.json", ERROR_CODES.AGENT_CONFIG_ERROR),
+        (err) => {
+          assert.equal(err.code, ERROR_CODES.AGENT_CONFIG_ERROR);
+          return true;
+        }
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("writeJsonAtomic", () => {
+  it("writes json file atomically", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-atomic-"));
+    const target = path.join(dir, "agent.auth.json");
+    try {
+      writeJsonAtomic(target, { a: 1 }, 0o600, ERROR_CODES.AUTH_CONFIG_ERROR, "agent.auth.json");
+      const raw = fs.readFileSync(target, "utf8");
+      const parsed = JSON.parse(raw);
+      assert.equal(parsed.a, 1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("cleans up tmp file and throws coded error when rename fails", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-atomic-fail-"));
+    const target = path.join(dir, "agent.auth.json");
+    const originalRename = fs.renameSync;
+    fs.renameSync = () => {
+      throw new Error("simulated rename failure");
+    };
+    try {
+      assert.throws(
+        () => writeJsonAtomic(target, { a: 1 }, 0o600, ERROR_CODES.AUTH_CONFIG_ERROR, "agent.auth.json"),
+        (err) => {
+          assert.equal(err.code, ERROR_CODES.AUTH_CONFIG_ERROR);
+          assert.ok(err.message.includes("Failed to write"));
+          return true;
+        }
+      );
+      const leftovers = fs.readdirSync(dir).filter((name) => name.includes(".tmp."));
+      assert.equal(leftovers.length, 0);
+    } finally {
+      fs.renameSync = originalRename;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

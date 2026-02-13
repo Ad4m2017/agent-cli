@@ -37,6 +37,8 @@
 <p>agent-cli nutzt zwei lokale JSON-Dateien fuer die Konfiguration:</p>
 <ul><li><code>agent.json</code> -- Nicht-geheime Runtime-Defaults und Sicherheitsrichtlinie. Kann committet werden.</li><li><code>agent.auth.json</code> -- Provider-Credentials und Tokens. Niemals committen.</li></ul>
 <p>Beide Dateien werden automatisch von <code>node agent-connect.js</code> erstellt. Du kannst sie auch manuell bearbeiten.</p>
+<p>Schreibverhalten:</p>
+<ul><li>Config-Speicherungen nutzen atomare Writes (Temp-Datei + Rename), um das Risiko teilweise/defekt geschriebener JSON-Dateien zu reduzieren.</li><li>Pfade via <code>--config</code> / <code>--auth-config</code> werden validiert. Das Parent-Verzeichnis muss existieren und der Zielpfad muss ein Dateipfad sein (kein Verzeichnis).</li></ul>
 <h2 id="doku-neu-bauen">Doku neu bauen</h2>
 <p>Nach Aenderungen an Markdown-Quellen, HTML neu generieren:</p>
 <pre><code class="language-bash">node scripts/build-docs.js</code></pre>

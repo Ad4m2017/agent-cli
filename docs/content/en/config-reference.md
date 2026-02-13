@@ -11,6 +11,11 @@ agent-cli uses two local JSON files for configuration:
 
 Both files are created automatically by `node agent-connect.js`. You can also edit them manually.
 
+Write behavior:
+
+- Config saves use atomic writes (temp file + rename) to reduce risk of partial/corrupted JSON.
+- Paths passed via `--config` / `--auth-config` are validated. Parent directory must exist and the target path must be a file path (not a directory).
+
 ## Rebuilding Docs
 
 After changing markdown sources, rebuild HTML:

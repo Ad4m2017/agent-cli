@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "0.7.0";
+const CONNECT_VERSION = "0.8.0";
 
 /**
  * Centralized error codes.
@@ -312,6 +312,78 @@ function toAbsolutePath(inputPath) {
   return path.isAbsolute(inputPath) ? inputPath : path.resolve(process.cwd(), inputPath);
 }
 
+function validateConfigPath(filePath, displayName, errorCode) {
+  const p = String(filePath || "");
+  if (!p) {
+    throw makeError(errorCode, `Invalid ${displayName} path.`);
+  }
+
+  const parent = path.dirname(p);
+  if (!fs.existsSync(parent)) {
+    throw makeError(errorCode, `Parent directory does not exist for ${displayName}: ${parent}`);
+  }
+
+  let parentStat;
+  try {
+    parentStat = fs.statSync(parent);
+  } catch (err) {
+    throw makeError(errorCode, `Cannot access parent directory for ${displayName}: ${parent} (${err.message})`);
+  }
+  if (!parentStat.isDirectory()) {
+    throw makeError(errorCode, `Parent path is not a directory for ${displayName}: ${parent}`);
+  }
+
+  if (fs.existsSync(p)) {
+    let st;
+    try {
+      st = fs.statSync(p);
+    } catch (err) {
+      throw makeError(errorCode, `Cannot access ${displayName}: ${p} (${err.message})`);
+    }
+    if (st.isDirectory()) {
+      throw makeError(errorCode, `${displayName} path points to a directory, expected a file: ${p}`);
+    }
+  }
+}
+
+function writeJsonAtomic(filePath, value, mode, errorCode, displayName) {
+  const target = String(filePath);
+  const parent = path.dirname(target);
+  const base = path.basename(target);
+  const tmpName = `.${base}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  const tmpPath = path.join(parent, tmpName);
+  const body = `${JSON.stringify(value, null, 2)}\n`;
+
+  try {
+    fs.writeFileSync(tmpPath, body, { mode });
+
+    try {
+      const fd = fs.openSync(tmpPath, "r");
+      try {
+        fs.fsyncSync(fd);
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      // Some filesystems/platforms may not support fsync reliably.
+    }
+
+    fs.renameSync(tmpPath, target);
+    try {
+      fs.chmodSync(target, mode);
+    } catch {
+      // ignore chmod issues
+    }
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch {
+      // best-effort cleanup
+    }
+    throw makeError(errorCode, `Failed to write ${displayName}: ${err.message}`);
+  }
+}
+
 function resolveConfigPaths(opts) {
   return {
     agentConfigPath: toAbsolutePath(opts && opts.configPath) || DEFAULT_AGENT_CONFIG_FILE,
@@ -354,6 +426,7 @@ function printHelp() {
  */
 function loadConfig(authConfigFilePath) {
   const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
+  validateConfigPath(filePath, "agent.auth.json", ERROR_CODES.AUTH_CONFIG_INVALID);
   if (!fs.existsSync(filePath)) {
     return {
       version: 1,
@@ -459,6 +532,7 @@ function defaultAgentConfig() {
 function loadAgentConfig(agentConfigFilePath) {
   const defaults = defaultAgentConfig();
   const filePath = agentConfigFilePath || DEFAULT_AGENT_CONFIG_FILE;
+  validateConfigPath(filePath, "agent.json", ERROR_CODES.AGENT_CONFIG_INVALID);
   if (!fs.existsSync(filePath)) return defaults;
 
   const raw = fs.readFileSync(filePath, "utf8");
@@ -486,24 +560,14 @@ function loadAgentConfig(agentConfigFilePath) {
 /** Persist config with restrictive local file permissions. */
 function saveConfig(config, authConfigFilePath) {
   const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
-  const body = `${JSON.stringify(config, null, 2)}\n`;
-  fs.writeFileSync(filePath, body, { mode: 0o600 });
-  try {
-    fs.chmodSync(filePath, 0o600);
-  } catch {
-    // ignore chmod issues
-  }
+  validateConfigPath(filePath, "agent.auth.json", ERROR_CODES.AUTH_CONFIG_INVALID);
+  writeJsonAtomic(filePath, config, 0o600, ERROR_CODES.AUTH_CONFIG_INVALID, "agent.auth.json");
 }
 
 function saveAgentConfig(config, agentConfigFilePath) {
   const filePath = agentConfigFilePath || DEFAULT_AGENT_CONFIG_FILE;
-  const body = `${JSON.stringify(config, null, 2)}\n`;
-  fs.writeFileSync(filePath, body, { mode: 0o600 });
-  try {
-    fs.chmodSync(filePath, 0o600);
-  } catch {
-    // ignore chmod issues
-  }
+  validateConfigPath(filePath, "agent.json", ERROR_CODES.AGENT_CONFIG_INVALID);
+  writeJsonAtomic(filePath, config, 0o600, ERROR_CODES.AGENT_CONFIG_INVALID, "agent.json");
 }
 
 /** Normalize provider aliases to canonical identifiers used in config. */
@@ -919,6 +983,8 @@ module.exports = {
   getModelMenuOptions,
   parseArgs,
   resolveConfigPaths,
+  validateConfigPath,
+  writeJsonAtomic,
   normalizeProvider,
   defaultAgentConfig,
   getCopilotDefaults,

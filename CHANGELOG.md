@@ -4,6 +4,26 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [0.8.0] - 2026-02-13
+
+### Added
+- Atomic JSON write helper (`writeJsonAtomic`) in both `agent.js` and `agent-connect.js` (temp file + rename) to avoid partial/corrupted config writes
+- Config path hardening helper (`validateConfigPath`) in both CLIs:
+  - validates parent directory exists
+  - validates parent is a directory
+  - rejects config paths that point to directories
+- New unit tests for atomic writes and config path validation in both test suites
+
+### Changed
+- Config persistence now uses atomic writes:
+  - `agent.js`: `saveProviderConfig`
+  - `agent-connect.js`: `saveConfig`, `saveAgentConfig`
+- Config loaders now validate file paths before reading:
+  - `agent.js`: `loadAgentConfig`, `loadProviderConfig`
+  - `agent-connect.js`: `loadConfig`, `loadAgentConfig`
+- Version bumped from `0.7.0` to `0.8.0` in `agent.js`, `agent-connect.js`, and `package.json`
+- Test count increased from 209 to 215
+
 ## [0.7.0] - 2026-02-13
 
 ### Added

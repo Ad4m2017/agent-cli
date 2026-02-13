@@ -5,6 +5,8 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 
 const {
@@ -18,6 +20,8 @@ const {
   getModelMenuOptions,
   parseArgs,
   resolveConfigPaths,
+  validateConfigPath,
+  writeJsonAtomic,
   normalizeProvider,
   defaultAgentConfig,
   getCopilotDefaults,
@@ -216,6 +220,36 @@ describe("resolveConfigPaths (connect)", () => {
     assert.ok(path.isAbsolute(resolved.authConfigPath));
     assert.ok(resolved.agentConfigPath.endsWith(path.join("cfg", "agent.custom.json")));
     assert.ok(resolved.authConfigPath.endsWith(path.join("cfg", "agent.auth.custom.json")));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateConfigPath / writeJsonAtomic (connect)
+// ---------------------------------------------------------------------------
+describe("validateConfigPath (connect)", () => {
+  it("throws AUTH_CONFIG_INVALID when parent directory is missing", () => {
+    const missing = path.join(os.tmpdir(), `connect-missing-${Date.now()}`, "agent.auth.json");
+    assert.throws(
+      () => validateConfigPath(missing, "agent.auth.json", ERROR_CODES.AUTH_CONFIG_INVALID),
+      (err) => {
+        assert.equal(err.code, ERROR_CODES.AUTH_CONFIG_INVALID);
+        return true;
+      }
+    );
+  });
+});
+
+describe("writeJsonAtomic (connect)", () => {
+  it("writes JSON using atomic flow", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "connect-atomic-"));
+    const target = path.join(dir, "agent.json");
+    try {
+      writeJsonAtomic(target, { version: 1 }, 0o600, ERROR_CODES.AGENT_CONFIG_INVALID, "agent.json");
+      const parsed = JSON.parse(fs.readFileSync(target, "utf8"));
+      assert.equal(parsed.version, 1);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

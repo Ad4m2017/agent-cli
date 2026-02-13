@@ -54,6 +54,8 @@ Im TTY-Terminal: Pfeiltasten und Enter zur Navigation. Der Wizard schreibt:
 - Runtime-Defaults und Sicherheitsrichtlinie in `agent.json`
 - Provider-Credentials in `agent.auth.json` (Klartext, Dateiberechtigungen auf 0600 gesetzt)
 
+Konfigurationsdateien werden jetzt atomar geschrieben (Temp-Datei + Rename), um das Risiko beschaedigter JSON-Dateien bei Abbruch waehrend des Schreibens zu reduzieren.
+
 ### Direktes Provider-Setup
 
 ```bash
