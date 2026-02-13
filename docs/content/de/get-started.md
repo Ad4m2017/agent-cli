@@ -231,6 +231,8 @@ node agent.js -m "nachricht" [optionen]
 Optionen:
   -m, --message <text>   Prompt ans Modell (erforderlich)
   --model <provider/model|model>
+  --config <pfad>        Pfad zu agent.json (Standard: ./agent.json)
+  --auth-config <pfad>   Pfad zu agent.auth.json (Standard: ./agent.auth.json)
   --json
   --mode <plan|build|unsafe>
   --approval <ask|auto|never>
@@ -242,12 +244,15 @@ Optionen:
   --unsafe               Unsafe-Modus erzwingen
   --log                  Fehler-Logging aktivieren
   --log-file <pfad>      Standard: ./agent.js.log
+  --verbose              Zusaetzliche Laufzeitdiagnostik
+  --debug                Detaillierte Diagnostik (impliziert --verbose)
+  --stream               Assistant-Text streamen wenn unterstuetzt (deaktiviert bei --json und Tool-Turns)
   --help
   --version
 ```
 
 ```text
-node agent-connect.js [--provider <name>] [--help] [--version]
+node agent-connect.js [--provider <name>] [--config <path>] [--auth-config <path>] [--help] [--version]
 ```
 
 ## Fehlerbehebung
@@ -257,6 +262,20 @@ node agent-connect.js [--provider <name>] [--help] [--version]
 - `INTERACTIVE_APPROVAL_TTY`: Interaktives Terminal nutzen oder `--approval auto` verwenden
 - `VISION_NOT_SUPPORTED`: Vision-Modell (gpt-4o, gpt-4.1) verwenden oder `--image` entfernen
 - `TOOLS_NOT_SUPPORTED`: `--tools auto` oder `--no-tools` verwenden
+- `FETCH_TIMEOUT`: Provider-Anfrage hat Timeout erreicht
+- `RETRY_EXHAUSTED`: Retries bei transienten Provider-Fehlern ausgeschopft
 - `COPILOT_DEVICE_CODE_EXPIRED`: `node agent-connect.js --provider copilot` erneut ausfuehren
 - `ATTACHMENT_TOO_LARGE`: Datei ueberschreitet 200KB oder Bild ueberschreitet 5MB
 - `AUTH_CONFIG_INVALID`: `agent.auth.json` loeschen und `node agent-connect.js` erneut ausfuehren
+
+Exit-Code-Mapping fuer CI/CD:
+
+- `1` generischer Laufzeit-/Connect-Fehler
+- `2` agent-config Fehler (`agent.json`)
+- `3` auth-config Fehler (`agent.auth.json`)
+- `4` Provider-Konfigurations-/Auswahlfehler
+- `5` interaktiver Approval-Constraint-Fehler
+- `6` Provider-Capability-/Copilot-Flow-Fehler
+- `7` Fetch-Timeout
+- `8` Retry ausgeschopft
+- `9` Attachment-Validierungsfehler

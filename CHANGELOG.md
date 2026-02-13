@@ -4,6 +4,47 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [0.7.0] - 2026-02-13
+
+### Added
+- New CLI flags in `agent.js`: `--config`, `--auth-config`, `--verbose`, `--debug`, `--stream`
+- New CLI flags in `agent-connect.js`: `--config`, `--auth-config`
+- Config path override support for both CLIs (`--config`, `--auth-config`) with absolute/relative path resolution
+- Streaming output mode for assistant text (`--stream`) with safe gating:
+  - disabled automatically for `--json`
+  - disabled automatically while tools are enabled
+  - enabled only for known streaming-capable providers
+- Automatic fallback from streaming to non-streaming request when provider/model rejects stream mode
+- Centralized log sanitization via `redactSensitiveText()` in both CLIs
+- Runtime logger abstraction in `agent.js` (`createLogger`) with levels:
+  - verbose (`--verbose`)
+  - debug (`--debug`, implies verbose)
+- Standardized error helper functions in both CLIs:
+  - `getErrorCode()`
+  - `getExitCodeForError()`
+- Stable process exit-code matrix for automation:
+  - `1` generic runtime/connect error
+  - `2` agent config error
+  - `3` auth config error
+  - `4` provider config/selection error
+  - `5` interactive approval constraint
+  - `6` provider capability / copilot flow error
+  - `7` fetch timeout
+  - `8` retry exhausted
+  - `9` attachment validation error
+
+### Changed
+- Retry diagnostics in `fetchWithRetry()` now use optional logger callback instead of unconditional `stderr` writes
+- Top-level error output in both CLIs is standardized to `Error [CODE]: ...`
+- Error logging now redacts sensitive values (tokens, API keys, authorization values)
+- `createChatCompletion()` now supports stream and non-stream flows through one API
+- Version bumped from `0.6.0` to `0.7.0` in `agent.js`, `agent-connect.js`, and `package.json`
+- Documentation refreshed in EN/DE for new flags, streaming behavior, and exit-code mapping
+
+### Tests
+- Expanded test coverage for new parser options, config path resolution, streaming helper logic, redaction, logger behavior, and exit-code mapping
+- Total tests increased to 209 (all passing)
+
 ## [0.6.0] - 2026-02-13
 
 ### Added

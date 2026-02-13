@@ -10,9 +10,9 @@ const { stdin, stdout } = require("node:process");
  * Runtime constants for the provider setup wizard.
  * Credentials are intentionally stored in local plaintext JSON for simplicity.
  */
-const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
-const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "0.6.0";
+const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
+const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
+const CONNECT_VERSION = "0.7.0";
 
 /**
  * Centralized error codes.
@@ -132,6 +132,39 @@ function makeError(code, message) {
   return e;
 }
 
+function redactSensitiveText(input) {
+  const text = input == null ? "" : String(input);
+  return text
+    .replace(/(Bearer\s+)[^\s"']+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:api[_-]?key|token|access_token|refresh_token)=)[^&\s]+/gi, "$1[REDACTED]")
+    .replace(/((?:api[_-]?key|token|access_token|refresh_token|authorization)\s*[:=]\s*["']?)[^"'\s,}]+/gi, "$1[REDACTED]")
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]+\b/g, "[REDACTED]");
+}
+
+function getErrorCode(err, fallbackCode) {
+  if (err && typeof err.code === "string" && err.code) return err.code;
+  return fallbackCode;
+}
+
+function getExitCodeForError(err) {
+  const code = getErrorCode(err, ERROR_CODES.CONNECT_ERROR);
+  if (code === ERROR_CODES.AGENT_CONFIG_INVALID) return 2;
+  if (code === ERROR_CODES.AUTH_CONFIG_INVALID) return 3;
+  if (code === ERROR_CODES.PROVIDER_INVALID || code === ERROR_CODES.PROVIDER_UNSUPPORTED || code === ERROR_CODES.API_KEY_REQUIRED) return 4;
+  if (
+    code === ERROR_CODES.COPILOT_DEVICE_START_FAILED ||
+    code === ERROR_CODES.COPILOT_DEVICE_FLOW_FAILED ||
+    code === ERROR_CODES.COPILOT_TOKEN_MISSING ||
+    code === ERROR_CODES.COPILOT_DEVICE_CODE_EXPIRED ||
+    code === ERROR_CODES.COPILOT_RUNTIME_TOKEN_FAILED ||
+    code === ERROR_CODES.COPILOT_RUNTIME_TOKEN_MISSING
+  ) {
+    return 6;
+  }
+  if (code === ERROR_CODES.FETCH_TIMEOUT) return 7;
+  return 1;
+}
+
 /**
  * Simple interactive select menu using arrow keys + Enter.
  * Falls back to initial option in non-TTY environments.
@@ -238,6 +271,8 @@ function getModelMenuOptions(provider) {
 function parseArgs(argv) {
   const opts = {
     provider: "",
+    configPath: "",
+    authConfigPath: "",
     help: false,
     version: false,
   };
@@ -246,6 +281,16 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === "--provider") {
       opts.provider = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+    if (a === "--config") {
+      opts.configPath = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+    if (a === "--auth-config") {
+      opts.authConfigPath = argv[i + 1] || "";
       i += 1;
       continue;
     }
@@ -260,6 +305,18 @@ function parseArgs(argv) {
   }
 
   return opts;
+}
+
+function toAbsolutePath(inputPath) {
+  if (!inputPath || typeof inputPath !== "string") return "";
+  return path.isAbsolute(inputPath) ? inputPath : path.resolve(process.cwd(), inputPath);
+}
+
+function resolveConfigPaths(opts) {
+  return {
+    agentConfigPath: toAbsolutePath(opts && opts.configPath) || DEFAULT_AGENT_CONFIG_FILE,
+    authConfigPath: toAbsolutePath(opts && opts.authConfigPath) || DEFAULT_AUTH_CONFIG_FILE,
+  };
 }
 
 /** Print usage/help text. */
@@ -278,6 +335,9 @@ function printHelp() {
     "  node agent-connect.js --provider copilot",
     "",
     "Options:",
+    "  --provider <name>  Choose provider without menu",
+    "  --config <path>    Path to agent.json (default: ./agent.json)",
+    "  --auth-config <path> Path to agent.auth.json (default: ./agent.auth.json)",
     "  -V, --version   Show version",
     "  -h, --help      Show help",
     "",
@@ -292,8 +352,9 @@ function printHelp() {
  * Load or initialize provider config.
  * Returns a complete object shape so callers can mutate safely.
  */
-function loadConfig() {
-  if (!fs.existsSync(AUTH_CONFIG_FILE)) {
+function loadConfig(authConfigFilePath) {
+  const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
+  if (!fs.existsSync(filePath)) {
     return {
       version: 1,
       defaultProvider: "",
@@ -302,7 +363,7 @@ function loadConfig() {
     };
   }
 
-  const raw = fs.readFileSync(AUTH_CONFIG_FILE, "utf8");
+  const raw = fs.readFileSync(filePath, "utf8");
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -395,11 +456,12 @@ function defaultAgentConfig() {
   };
 }
 
-function loadAgentConfig() {
+function loadAgentConfig(agentConfigFilePath) {
   const defaults = defaultAgentConfig();
-  if (!fs.existsSync(AGENT_CONFIG_FILE)) return defaults;
+  const filePath = agentConfigFilePath || DEFAULT_AGENT_CONFIG_FILE;
+  if (!fs.existsSync(filePath)) return defaults;
 
-  const raw = fs.readFileSync(AGENT_CONFIG_FILE, "utf8");
+  const raw = fs.readFileSync(filePath, "utf8");
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -422,21 +484,23 @@ function loadAgentConfig() {
 }
 
 /** Persist config with restrictive local file permissions. */
-function saveConfig(config) {
+function saveConfig(config, authConfigFilePath) {
+  const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
   const body = `${JSON.stringify(config, null, 2)}\n`;
-  fs.writeFileSync(AUTH_CONFIG_FILE, body, { mode: 0o600 });
+  fs.writeFileSync(filePath, body, { mode: 0o600 });
   try {
-    fs.chmodSync(AUTH_CONFIG_FILE, 0o600);
+    fs.chmodSync(filePath, 0o600);
   } catch {
     // ignore chmod issues
   }
 }
 
-function saveAgentConfig(config) {
+function saveAgentConfig(config, agentConfigFilePath) {
+  const filePath = agentConfigFilePath || DEFAULT_AGENT_CONFIG_FILE;
   const body = `${JSON.stringify(config, null, 2)}\n`;
-  fs.writeFileSync(AGENT_CONFIG_FILE, body, { mode: 0o600 });
+  fs.writeFileSync(filePath, body, { mode: 0o600 });
   try {
-    fs.chmodSync(AGENT_CONFIG_FILE, 0o600);
+    fs.chmodSync(filePath, 0o600);
   } catch {
     // ignore chmod issues
   }
@@ -720,6 +784,7 @@ async function setupCopilot(rl, providersConfig, agentConfig) {
 /** Main connect wizard entrypoint. */
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  const paths = resolveConfigPaths(opts);
   if (opts.help) {
     printHelp();
     process.exit(0);
@@ -730,8 +795,8 @@ async function main() {
     process.exit(0);
   }
 
-  const providersConfig = loadConfig();
-  const agentConfig = loadAgentConfig();
+  const providersConfig = loadConfig(paths.authConfigPath);
+  const agentConfig = loadAgentConfig(paths.agentConfigPath);
   const rl = readlinePromises.createInterface({ input: stdin, output: stdout });
 
   try {
@@ -813,11 +878,11 @@ async function main() {
       }
     }
 
-    saveConfig(providersConfig);
-    saveAgentConfig(agentConfig);
+    saveConfig(providersConfig, paths.authConfigPath);
+    saveAgentConfig(agentConfig, paths.agentConfigPath);
 
-    process.stdout.write(`\nSaved: ${AUTH_CONFIG_FILE}\n`);
-    process.stdout.write(`Saved: ${AGENT_CONFIG_FILE}\n`);
+    process.stdout.write(`\nSaved: ${paths.authConfigPath}\n`);
+    process.stdout.write(`Saved: ${paths.agentConfigPath}\n`);
     process.stdout.write("Note: file contains plaintext secrets. Do not commit.\n");
   } finally {
     rl.close();
@@ -835,10 +900,11 @@ if (require.main === module) {
   process.on("SIGTERM", () => handleSignal("SIGTERM"));
 
   main().catch((err) => {
-    const msg = err && err.message ? err.message : String(err);
-    const code = err && err.code ? err.code : ERROR_CODES.CONNECT_ERROR;
+    const msg = redactSensitiveText(err && err.message ? err.message : String(err));
+    const code = getErrorCode(err, ERROR_CODES.CONNECT_ERROR);
+    const exitCode = getExitCodeForError(err);
     process.stderr.write(`Error [${code}]: ${msg}\n`);
-    process.exit(1);
+    process.exit(exitCode);
   });
 }
 
@@ -846,9 +912,13 @@ module.exports = {
   ERROR_CODES,
   fetchWithTimeout,
   makeError,
+  redactSensitiveText,
+  getErrorCode,
+  getExitCodeForError,
   getProviderMenuOptions,
   getModelMenuOptions,
   parseArgs,
+  resolveConfigPaths,
   normalizeProvider,
   defaultAgentConfig,
   getCopilotDefaults,

@@ -14,6 +14,11 @@ const {
   fetchWithRetry,
   parseCliArgs,
   applyEnvOverrides,
+  resolveConfigPaths,
+  redactSensitiveText,
+  createLogger,
+  getErrorCode,
+  getExitCodeForError,
   defaultAgentConfig,
   splitProviderModel,
   resolveModelSelection,
@@ -27,6 +32,9 @@ const {
   isToolUnsupportedError,
   modelLikelySupportsVision,
   isVisionUnsupportedError,
+  providerLikelySupportsStreaming,
+  shouldUseStreaming,
+  isStreamUnsupportedError,
   buildUserMessageContent,
   extractAssistantText,
   detectImageMime,
@@ -83,9 +91,14 @@ describe("parseCliArgs", () => {
     const opts = parseCliArgs([]);
     assert.equal(opts.message, "");
     assert.equal(opts.model, "");
+    assert.equal(opts.configPath, "");
+    assert.equal(opts.authConfigPath, "");
     assert.equal(opts.log, false);
     assert.equal(opts.json, false);
     assert.equal(opts.unsafe, false);
+    assert.equal(opts.verbose, false);
+    assert.equal(opts.debug, false);
+    assert.equal(opts.stream, false);
     assert.equal(opts.mode, "");
     assert.equal(opts.approval, "");
     assert.equal(opts.tools, "");
@@ -105,10 +118,27 @@ describe("parseCliArgs", () => {
     assert.equal(parseCliArgs(["--model", "copilot/gpt-4o"]).model, "copilot/gpt-4o");
   });
 
+  it("parses --config and --auth-config", () => {
+    const opts = parseCliArgs(["--config", "cfg/agent.json", "--auth-config", "cfg/agent.auth.json"]);
+    assert.equal(opts.configPath, "cfg/agent.json");
+    assert.equal(opts.authConfigPath, "cfg/agent.auth.json");
+  });
+
   it("parses boolean flags", () => {
     assert.equal(parseCliArgs(["--log"]).log, true);
     assert.equal(parseCliArgs(["--json"]).json, true);
     assert.equal(parseCliArgs(["--unsafe"]).unsafe, true);
+  });
+
+  it("parses --verbose, --debug and --stream", () => {
+    const verbose = parseCliArgs(["--verbose"]);
+    assert.equal(verbose.verbose, true);
+    assert.equal(verbose.debug, false);
+    const debug = parseCliArgs(["--debug"]);
+    assert.equal(debug.debug, true);
+    assert.equal(debug.verbose, true);
+    const stream = parseCliArgs(["--stream"]);
+    assert.equal(stream.stream, true);
   });
 
   it("parses --log-file", () => {
@@ -570,6 +600,53 @@ describe("isVisionUnsupportedError", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Streaming helpers
+// ---------------------------------------------------------------------------
+describe("providerLikelySupportsStreaming", () => {
+  it("returns true for known streaming providers", () => {
+    assert.equal(providerLikelySupportsStreaming("openai"), true);
+    assert.equal(providerLikelySupportsStreaming("copilot"), true);
+    assert.equal(providerLikelySupportsStreaming("openrouter"), true);
+  });
+
+  it("returns false for unknown providers", () => {
+    assert.equal(providerLikelySupportsStreaming("custom"), false);
+    assert.equal(providerLikelySupportsStreaming(""), false);
+  });
+});
+
+describe("shouldUseStreaming", () => {
+  it("returns true when stream enabled, json off, tools off, provider supported", () => {
+    const opts = { stream: true, json: false };
+    const runtime = { provider: "openai" };
+    assert.equal(shouldUseStreaming(opts, runtime, false), true);
+  });
+
+  it("returns false when json mode is on", () => {
+    const opts = { stream: true, json: true };
+    const runtime = { provider: "openai" };
+    assert.equal(shouldUseStreaming(opts, runtime, false), false);
+  });
+
+  it("returns false when tools are enabled", () => {
+    const opts = { stream: true, json: false };
+    const runtime = { provider: "openai" };
+    assert.equal(shouldUseStreaming(opts, runtime, true), false);
+  });
+});
+
+describe("isStreamUnsupportedError", () => {
+  it("detects stream unsupported messages", () => {
+    assert.equal(isStreamUnsupportedError({ message: "stream is not supported for this model" }), true);
+    assert.equal(isStreamUnsupportedError({ message: "unsupported parameter: stream" }), true);
+  });
+
+  it("returns false for unrelated errors", () => {
+    assert.equal(isStreamUnsupportedError({ message: "rate limit exceeded" }), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // buildUserMessageContent
 // ---------------------------------------------------------------------------
 describe("buildUserMessageContent", () => {
@@ -814,6 +891,39 @@ describe("toAbsolutePath", () => {
 });
 
 // ---------------------------------------------------------------------------
+// resolveConfigPaths
+// ---------------------------------------------------------------------------
+describe("resolveConfigPaths", () => {
+  it("returns default config paths when CLI paths are empty", () => {
+    const resolved = resolveConfigPaths({ configPath: "", authConfigPath: "" });
+    assert.ok(path.isAbsolute(resolved.agentConfigPath));
+    assert.ok(path.isAbsolute(resolved.authConfigPath));
+    assert.ok(resolved.agentConfigPath.endsWith("agent.json"));
+    assert.ok(resolved.authConfigPath.endsWith("agent.auth.json"));
+  });
+
+  it("resolves relative --config and --auth-config paths", () => {
+    const resolved = resolveConfigPaths({
+      configPath: "cfg/agent.custom.json",
+      authConfigPath: "cfg/agent.auth.custom.json",
+    });
+    assert.ok(path.isAbsolute(resolved.agentConfigPath));
+    assert.ok(path.isAbsolute(resolved.authConfigPath));
+    assert.ok(resolved.agentConfigPath.endsWith(path.join("cfg", "agent.custom.json")));
+    assert.ok(resolved.authConfigPath.endsWith(path.join("cfg", "agent.auth.custom.json")));
+  });
+
+  it("keeps absolute paths unchanged", () => {
+    const resolved = resolveConfigPaths({
+      configPath: "/tmp/custom-agent.json",
+      authConfigPath: "/tmp/custom-agent.auth.json",
+    });
+    assert.equal(resolved.agentConfigPath, "/tmp/custom-agent.json");
+    assert.equal(resolved.authConfigPath, "/tmp/custom-agent.auth.json");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // fetchWithTimeout
 // ---------------------------------------------------------------------------
 describe("fetchWithTimeout", () => {
@@ -935,10 +1045,8 @@ describe("fetchWithRetry", () => {
 
   it("retries on 503 and succeeds on second attempt", async () => {
     const originalFetch = globalThis.fetch;
-    const originalStderrWrite = process.stderr.write;
     let callCount = 0;
-    let stderrOutput = "";
-    process.stderr.write = (msg) => { stderrOutput += msg; };
+    const logs = [];
     globalThis.fetch = () => {
       callCount++;
       if (callCount === 1) {
@@ -947,23 +1055,24 @@ describe("fetchWithRetry", () => {
       return Promise.resolve({ ok: true, status: 200 });
     };
     try {
-      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, {
+        maxRetries: 3,
+        baseDelayMs: 1,
+        logFn: (msg) => logs.push(msg),
+      });
       assert.equal(res.ok, true);
       assert.equal(callCount, 2);
-      assert.ok(stderrOutput.includes("Retry 1/3"), "Should log retry to stderr");
-      assert.ok(stderrOutput.includes("HTTP 503"), "Should mention status code");
+      assert.ok(logs.some((m) => m.includes("Retry 1/3")), "Should emit retry log");
+      assert.ok(logs.some((m) => m.includes("HTTP 503")), "Should mention status code");
     } finally {
       globalThis.fetch = originalFetch;
-      process.stderr.write = originalStderrWrite;
     }
   });
 
   it("retries on 429 with Retry-After header", async () => {
     const originalFetch = globalThis.fetch;
-    const originalStderrWrite = process.stderr.write;
     let callCount = 0;
-    let loggedDelay = "";
-    process.stderr.write = (msg) => { loggedDelay += msg; };
+    const logs = [];
     globalThis.fetch = () => {
       callCount++;
       if (callCount === 1) {
@@ -974,20 +1083,21 @@ describe("fetchWithRetry", () => {
       return Promise.resolve({ ok: true, status: 200 });
     };
     try {
-      const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 3, baseDelayMs: 1 });
+      const res = await fetchWithRetry("http://localhost/test", {}, 5000, {
+        maxRetries: 3,
+        baseDelayMs: 1,
+        logFn: (msg) => logs.push(msg),
+      });
       assert.equal(res.ok, true);
       assert.equal(callCount, 2);
-      assert.ok(loggedDelay.includes("429"), "Should mention 429 in retry log");
+      assert.ok(logs.some((m) => m.includes("429")), "Should mention 429 in retry log");
     } finally {
       globalThis.fetch = originalFetch;
-      process.stderr.write = originalStderrWrite;
     }
   });
 
   it("returns last response after maxRetries exhausted on 500", async () => {
     const originalFetch = globalThis.fetch;
-    const originalStderrWrite = process.stderr.write;
-    process.stderr.write = () => {};
     globalThis.fetch = () => Promise.resolve({ ok: false, status: 500, headers: new Map() });
     try {
       const res = await fetchWithRetry("http://localhost/test", {}, 5000, { maxRetries: 2, baseDelayMs: 1 });
@@ -995,7 +1105,6 @@ describe("fetchWithRetry", () => {
       assert.equal(res.status, 500);
     } finally {
       globalThis.fetch = originalFetch;
-      process.stderr.write = originalStderrWrite;
     }
   });
 
@@ -1033,8 +1142,6 @@ describe("fetchWithRetry", () => {
 
   it("retries on FETCH_TIMEOUT and throws RETRY_EXHAUSTED after maxRetries", async () => {
     const originalFetch = globalThis.fetch;
-    const originalStderrWrite = process.stderr.write;
-    process.stderr.write = () => {};
     globalThis.fetch = (url, opts) => {
       // Simulate timeout by listening for abort signal
       return new Promise((resolve, reject) => {
@@ -1058,7 +1165,6 @@ describe("fetchWithRetry", () => {
       );
     } finally {
       globalThis.fetch = originalFetch;
-      process.stderr.write = originalStderrWrite;
     }
   });
 
@@ -1164,5 +1270,120 @@ describe("applyEnvOverrides", () => {
       if (originalApproval === undefined) delete process.env.AGENT_APPROVAL;
       else process.env.AGENT_APPROVAL = originalApproval;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// redactSensitiveText
+// ---------------------------------------------------------------------------
+describe("redactSensitiveText", () => {
+  it("redacts bearer tokens", () => {
+    const out = redactSensitiveText("Authorization: Bearer abc123.secret.token");
+    assert.ok(out.includes("[REDACTED]"));
+    assert.ok(!out.includes("abc123.secret.token"));
+  });
+
+  it("redacts token-like key/value fields", () => {
+    const out = redactSensitiveText('apiKey="sk-live-very-secret" refresh_token=rt_12345');
+    assert.ok(!out.includes("sk-live-very-secret"));
+    assert.ok(!out.includes("rt_12345"));
+    assert.ok(out.includes("[REDACTED]"));
+  });
+
+  it("redacts token query params", () => {
+    const out = redactSensitiveText("https://x.test/path?token=abc123&foo=1");
+    assert.ok(out.includes("token=[REDACTED]"));
+    assert.ok(!out.includes("token=abc123"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createLogger
+// ---------------------------------------------------------------------------
+describe("createLogger", () => {
+  it("does not write logs when verbose/debug are disabled", () => {
+    const originalWrite = process.stderr.write;
+    let output = "";
+    process.stderr.write = (msg) => {
+      output += msg;
+    };
+    try {
+      const logger = createLogger({ verbose: false, debug: false });
+      logger.verbose("hello");
+      logger.debug("world");
+      assert.equal(output, "");
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("writes verbose logs and redacts sensitive content", () => {
+    const originalWrite = process.stderr.write;
+    let output = "";
+    process.stderr.write = (msg) => {
+      output += msg;
+    };
+    try {
+      const logger = createLogger({ verbose: true, debug: false });
+      logger.verbose("Authorization: Bearer secret-token-123");
+      assert.ok(output.includes("[verbose]"));
+      assert.ok(output.includes("[REDACTED]"));
+      assert.ok(!output.includes("secret-token-123"));
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("writes debug logs only when debug is enabled", () => {
+    const originalWrite = process.stderr.write;
+    let output = "";
+    process.stderr.write = (msg) => {
+      output += msg;
+    };
+    try {
+      const logger = createLogger({ verbose: false, debug: true });
+      logger.debug("debug message");
+      assert.ok(output.includes("[debug] debug message"));
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// error code + exit code helpers
+// ---------------------------------------------------------------------------
+describe("getErrorCode", () => {
+  it("returns err.code when present", () => {
+    assert.equal(getErrorCode({ code: "X" }, "FALLBACK"), "X");
+  });
+
+  it("returns fallback when err.code missing", () => {
+    assert.equal(getErrorCode({}, "FALLBACK"), "FALLBACK");
+    assert.equal(getErrorCode(null, "FALLBACK"), "FALLBACK");
+  });
+});
+
+describe("getExitCodeForError", () => {
+  it("maps config errors to exit code 2/3", () => {
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.AGENT_CONFIG_INVALID }), 2);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.AUTH_CONFIG_INVALID }), 3);
+  });
+
+  it("maps provider and runtime class errors", () => {
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.PROVIDER_NOT_CONFIGURED }), 4);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.INTERACTIVE_APPROVAL_TTY }), 5);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.TOOLS_NOT_SUPPORTED }), 6);
+  });
+
+  it("maps timeout/retry/attachment errors", () => {
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.FETCH_TIMEOUT }), 7);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.RETRY_EXHAUSTED }), 8);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.ATTACHMENT_NOT_FOUND }), 9);
+  });
+
+  it("defaults to 1 for unknown errors", () => {
+    assert.equal(getExitCodeForError({ code: "UNKNOWN" }), 1);
+    assert.equal(getExitCodeForError(new Error("x")), 1);
   });
 });

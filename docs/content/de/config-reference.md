@@ -238,6 +238,8 @@ Wenn alle Tokens abgelaufen sind und der Refresh fehlschlaegt: `node agent-conne
 - `AUTH_CONFIG_INVALID` -- agent.auth.json ist kein gueltiges JSON
 - `AGENT_CONFIG_ERROR` -- agent.json konnte nicht gelesen werden
 - `AUTH_CONFIG_ERROR` -- agent.auth.json konnte nicht gelesen werden
+- `FETCH_TIMEOUT` -- Provider-Anfrage hat Timeout erreicht
+- `RETRY_EXHAUSTED` -- Alle Retry-Versuche bei transientem Provider-Fehler fehlgeschlagen
 - `RUNTIME_ERROR` -- Unbehandelter Laufzeitfehler
 
 ### agent-connect.js Fehler
@@ -257,11 +259,31 @@ Wenn alle Tokens abgelaufen sind und der Refresh fehlschlaegt: `node agent-conne
 - `INTERRUPTED` -- Benutzer hat Ctrl+C waehrend des Wizards gedrueckt
 - `CONNECT_ERROR` -- Unbehandelter Fehler waehrend des Setups
 
+## Exit-Codes
+
+agent-cli nutzt jetzt stabile Prozess-Exit-Codes fuer Automation:
+
+- `1` generischer Laufzeit-/Connect-Fehler
+- `2` agent-config Fehler (`agent.json`)
+- `3` auth-config Fehler (`agent.auth.json`)
+- `4` Provider-Konfigurations-/Auswahlfehler
+- `5` interaktiver Approval-Constraint-Fehler
+- `6` Provider-Capability-/Copilot-Flow-Fehler
+- `7` Fetch-Timeout
+- `8` Retry ausgeschopft
+- `9` Attachment-Validierungsfehler
+
 ## CLI-Prioritaet
 
 Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):
 
 1. CLI-Flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`)
-2. `agent.json` Runtime-Defaults
-3. `agent.auth.json` Defaults (`defaultProvider`, `defaultModel`)
-4. Hardcodierte Fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
+2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`)
+3. `agent.json` Runtime-Defaults
+4. `agent.auth.json` Defaults (`defaultProvider`, `defaultModel`)
+5. Hardcodierte Fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
+
+Aufloesung der Konfigurationspfade:
+
+- `--config <pfad>` ueberschreibt den Standard `./agent.json`
+- `--auth-config <pfad>` ueberschreibt den Standard `./agent.auth.json`

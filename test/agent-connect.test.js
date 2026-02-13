@@ -5,14 +5,19 @@
 
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 
 const {
   ERROR_CODES,
   fetchWithTimeout,
   makeError,
+  redactSensitiveText,
+  getErrorCode,
+  getExitCodeForError,
   getProviderMenuOptions,
   getModelMenuOptions,
   parseArgs,
+  resolveConfigPaths,
   normalizeProvider,
   defaultAgentConfig,
   getCopilotDefaults,
@@ -151,6 +156,8 @@ describe("parseArgs (connect)", () => {
   it("returns defaults for empty argv", () => {
     const opts = parseArgs([]);
     assert.equal(opts.provider, "");
+    assert.equal(opts.configPath, "");
+    assert.equal(opts.authConfigPath, "");
     assert.equal(opts.help, false);
     assert.equal(opts.version, false);
   });
@@ -179,6 +186,36 @@ describe("parseArgs (connect)", () => {
   it("handles missing --provider value gracefully", () => {
     const opts = parseArgs(["--provider"]);
     assert.equal(opts.provider, "");
+  });
+
+  it("parses --config and --auth-config", () => {
+    const opts = parseArgs(["--config", "cfg/agent.json", "--auth-config", "cfg/agent.auth.json"]);
+    assert.equal(opts.configPath, "cfg/agent.json");
+    assert.equal(opts.authConfigPath, "cfg/agent.auth.json");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveConfigPaths
+// ---------------------------------------------------------------------------
+describe("resolveConfigPaths (connect)", () => {
+  it("returns default paths when args are empty", () => {
+    const resolved = resolveConfigPaths({ configPath: "", authConfigPath: "" });
+    assert.ok(path.isAbsolute(resolved.agentConfigPath));
+    assert.ok(path.isAbsolute(resolved.authConfigPath));
+    assert.ok(resolved.agentConfigPath.endsWith("agent.json"));
+    assert.ok(resolved.authConfigPath.endsWith("agent.auth.json"));
+  });
+
+  it("resolves relative paths", () => {
+    const resolved = resolveConfigPaths({
+      configPath: "cfg/agent.custom.json",
+      authConfigPath: "cfg/agent.auth.custom.json",
+    });
+    assert.ok(path.isAbsolute(resolved.agentConfigPath));
+    assert.ok(path.isAbsolute(resolved.authConfigPath));
+    assert.ok(resolved.agentConfigPath.endsWith(path.join("cfg", "agent.custom.json")));
+    assert.ok(resolved.authConfigPath.endsWith(path.join("cfg", "agent.auth.custom.json")));
   });
 });
 
@@ -336,5 +373,53 @@ describe("fetchWithTimeout (connect)", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// redactSensitiveText (connect)
+// ---------------------------------------------------------------------------
+describe("redactSensitiveText (connect)", () => {
+  it("redacts bearer tokens", () => {
+    const out = redactSensitiveText("Authorization: Bearer very-secret-token");
+    assert.ok(out.includes("[REDACTED]"));
+    assert.ok(!out.includes("very-secret-token"));
+  });
+
+  it("redacts query token params", () => {
+    const out = redactSensitiveText("https://x.test?a=1&token=abc123");
+    assert.ok(out.includes("token=[REDACTED]"));
+    assert.ok(!out.includes("token=abc123"));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// error code + exit code helpers (connect)
+// ---------------------------------------------------------------------------
+describe("getErrorCode (connect)", () => {
+  it("returns err.code when present", () => {
+    assert.equal(getErrorCode({ code: "X" }, "FALLBACK"), "X");
+  });
+
+  it("returns fallback when err.code missing", () => {
+    assert.equal(getErrorCode({}, "FALLBACK"), "FALLBACK");
+    assert.equal(getErrorCode(null, "FALLBACK"), "FALLBACK");
+  });
+});
+
+describe("getExitCodeForError (connect)", () => {
+  it("maps config errors", () => {
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.AGENT_CONFIG_INVALID }), 2);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.AUTH_CONFIG_INVALID }), 3);
+  });
+
+  it("maps provider and copilot flow errors", () => {
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.PROVIDER_INVALID }), 4);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.COPILOT_DEVICE_FLOW_FAILED }), 6);
+  });
+
+  it("maps timeout and default", () => {
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.FETCH_TIMEOUT }), 7);
+    assert.equal(getExitCodeForError({ code: "UNKNOWN" }), 1);
   });
 });

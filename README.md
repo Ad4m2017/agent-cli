@@ -166,6 +166,8 @@ node agent.js -m "message" [options]
 Options:
   -m, --message <text>   Model prompt (required)
   --model <name>         Model or provider/model (e.g. openai/gpt-4.1)
+  --config <path>        Path to agent.json (default: ./agent.json)
+  --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)
   --json                 Output structured JSON with tool call details
   --mode <name>          Security mode: plan, build, unsafe
   --approval <name>      Approval mode: ask, auto, never
@@ -177,6 +179,9 @@ Options:
   --unsafe               Force unsafe mode (denyCritical rules still apply)
   --log                  Enable error logging to file
   --log-file <path>      Log file path (default: ./agent.js.log)
+  --verbose              Print additional runtime diagnostics
+  --debug                Print detailed diagnostics (implies --verbose)
+  --stream               Stream assistant text output when supported
   -V, --version          Show version
   -h, --help             Show help
 ```
@@ -190,6 +195,9 @@ Providers: copilot, deepseek, fireworks, groq, mistral,
            moonshot, openai, openrouter, perplexity, together, xai
 
 Options:
+  --provider <name>  Choose provider without menu
+  --config <path>    Path to agent.json (default: ./agent.json)
+  --auth-config <path> Path to agent.auth.json (default: ./agent.auth.json)
   -V, --version   Show version
   -h, --help      Show help
 ```
@@ -260,9 +268,23 @@ node agent.js -m "Fix the failing test" --model openai/gpt-4.1 --approval auto
 | `INTERACTIVE_APPROVAL_TTY` | `--approval ask` in non-TTY environment | Use `--approval auto` or run in interactive terminal |
 | `VISION_NOT_SUPPORTED` | Image attached to text-only model | Use a vision model (gpt-4o, gpt-4.1) or remove `--image` |
 | `TOOLS_NOT_SUPPORTED` | `--tools on` with incompatible model | Use `--tools auto` or `--no-tools` |
+| `FETCH_TIMEOUT` | Provider request exceeded timeout | Retry, or use another provider/model |
+| `RETRY_EXHAUSTED` | Transient retries failed repeatedly | Check provider status/network and retry |
 | `COPILOT_DEVICE_CODE_EXPIRED` | OAuth code timed out | Re-run `node agent-connect.js --provider copilot` |
 | `ATTACHMENT_TOO_LARGE` | File > 200KB or image > 5MB | Use a smaller file or split it |
 | `AUTH_CONFIG_INVALID` | Corrupted `agent.auth.json` | Delete the file and re-run `node agent-connect.js` |
+
+Exit codes are now standardized for automation:
+
+- `1` generic runtime/connect error
+- `2` agent config error (`agent.json`)
+- `3` auth config error (`agent.auth.json`)
+- `4` provider configuration/selection error
+- `5` interactive approval constraint error
+- `6` provider capability / copilot flow error
+- `7` fetch timeout
+- `8` retry exhausted
+- `9` attachment validation error
 
 ## Documentation
 
@@ -283,7 +305,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `0.3.1` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `0.7.0` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

@@ -231,6 +231,8 @@ node agent.js -m "message" [options]
 Options:
   -m, --message <text>   Model prompt (required)
   --model <provider/model|model>
+  --config <path>        Path to agent.json (default: ./agent.json)
+  --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)
   --json
   --mode <plan|build|unsafe>
   --approval <ask|auto|never>
@@ -242,12 +244,15 @@ Options:
   --unsafe               Force unsafe mode
   --log                  Enable error logging
   --log-file <path>      Default: ./agent.js.log
+  --verbose              Additional runtime diagnostics
+  --debug                Detailed diagnostics (implies --verbose)
+  --stream               Stream assistant text when supported (disabled in --json and tool turns)
   --help
   --version
 ```
 
 ```text
-node agent-connect.js [--provider <name>] [--help] [--version]
+node agent-connect.js [--provider <name>] [--config <path>] [--auth-config <path>] [--help] [--version]
 ```
 
 ## Troubleshooting
@@ -257,6 +262,20 @@ node agent-connect.js [--provider <name>] [--help] [--version]
 - `INTERACTIVE_APPROVAL_TTY`: Run in an interactive terminal or use `--approval auto`
 - `VISION_NOT_SUPPORTED`: Use a vision model (gpt-4o, gpt-4.1) or remove `--image`
 - `TOOLS_NOT_SUPPORTED`: Use `--tools auto` or `--no-tools`
+- `FETCH_TIMEOUT`: Provider request exceeded timeout
+- `RETRY_EXHAUSTED`: Retries on transient provider failures were exhausted
 - `COPILOT_DEVICE_CODE_EXPIRED`: Re-run `node agent-connect.js --provider copilot`
 - `ATTACHMENT_TOO_LARGE`: File exceeds 200KB or image exceeds 5MB
 - `AUTH_CONFIG_INVALID`: Delete `agent.auth.json` and re-run `node agent-connect.js`
+
+Exit code mapping for CI/CD:
+
+- `1` generic runtime/connect error
+- `2` agent config error (`agent.json`)
+- `3` auth config error (`agent.auth.json`)
+- `4` provider configuration/selection error
+- `5` interactive approval constraint error
+- `6` provider capability / copilot flow error
+- `7` fetch timeout
+- `8` retry exhausted
+- `9` attachment validation error

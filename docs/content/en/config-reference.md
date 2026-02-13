@@ -238,6 +238,8 @@ If all tokens are expired and refresh fails, re-run `node agent-connect.js --pro
 - `AUTH_CONFIG_INVALID` -- agent.auth.json is not valid JSON
 - `AGENT_CONFIG_ERROR` -- Failed to read agent.json
 - `AUTH_CONFIG_ERROR` -- Failed to read agent.auth.json
+- `FETCH_TIMEOUT` -- Provider request exceeded timeout
+- `RETRY_EXHAUSTED` -- All retry attempts failed for a transient provider error
 - `RUNTIME_ERROR` -- Unhandled runtime error
 
 ### agent-connect.js Errors
@@ -257,11 +259,31 @@ If all tokens are expired and refresh fails, re-run `node agent-connect.js --pro
 - `INTERRUPTED` -- User pressed Ctrl+C during wizard
 - `CONNECT_ERROR` -- Unhandled error during setup
 
+## Exit Codes
+
+agent-cli now uses stable process exit codes for automation:
+
+- `1` generic runtime/connect error
+- `2` agent config error (`agent.json`)
+- `3` auth config error (`agent.auth.json`)
+- `4` provider configuration/selection error
+- `5` interactive approval constraint error
+- `6` provider capability / copilot flow error
+- `7` fetch timeout
+- `8` retry exhausted
+- `9` attachment validation error
+
 ## CLI Precedence
 
 Configuration values are resolved in this order (first wins):
 
 1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`)
-2. `agent.json` runtime defaults
-3. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)
-4. Hardcoded fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
+2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`)
+3. `agent.json` runtime defaults
+4. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)
+5. Hardcoded fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
+
+Config file path resolution:
+
+- `--config <path>` overrides the default `./agent.json`
+- `--auth-config <path>` overrides the default `./agent.auth.json`

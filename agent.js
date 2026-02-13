@@ -9,15 +9,15 @@ const execFileAsync = promisify(execFile);
 
 /**
  * Runtime constants.
- * - AGENT_CONFIG_FILE: local runtime/policy config file in project root.
- * - AUTH_CONFIG_FILE: local provider credential/config file in project root.
+ * - DEFAULT_AGENT_CONFIG_FILE: default runtime/policy config path in project root.
+ * - DEFAULT_AUTH_CONFIG_FILE: default provider credential/config path in project root.
  * - COPILOT_REFRESH_BUFFER_MS: refresh Copilot token slightly before expiry.
  * - AGENT_VERSION: CLI version displayed via --version.
  */
-const AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
-const AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
+const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
+const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.6.0";
+const AGENT_VERSION = "0.7.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -132,6 +132,7 @@ function parseRetryAfter(headerValue, maxDelayMs) {
  */
 async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
   const cfg = Object.assign({}, DEFAULT_RETRY_OPTS, retryOpts || {});
+  const logFn = typeof cfg.logFn === "function" ? cfg.logFn : null;
   let lastError = null;
 
   for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
@@ -147,7 +148,7 @@ async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
         const raHeader = res.headers ? res.headers.get("retry-after") : null;
         const raMs = parseRetryAfter(raHeader, cfg.maxDelayMs);
         const delayMs = raMs != null ? raMs : Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
-        process.stderr.write(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP 429 rate limited)\n`);
+        if (logFn) logFn(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP 429 rate limited)`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
       }
@@ -156,7 +157,7 @@ async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
       if (cfg.retryableStatuses.indexOf(res.status) !== -1) {
         if (attempt >= cfg.maxRetries) return res;
         const delayMs = Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
-        process.stderr.write(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP ${res.status})\n`);
+        if (logFn) logFn(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP ${res.status})`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
       }
@@ -170,7 +171,7 @@ async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
       if (err && err.code === ERROR_CODES.FETCH_TIMEOUT) {
         if (attempt >= cfg.maxRetries) break;
         const delayMs = Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
-        process.stderr.write(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (timeout)\n`);
+        if (logFn) logFn(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (timeout)`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
       }
@@ -202,10 +203,15 @@ function parseCliArgs(argv) {
   const opts = {
     message: "",
     model: "",
+    configPath: "",
+    authConfigPath: "",
     log: false,
     logFile: "agent.js.log",
     json: false,
     unsafe: false,
+    verbose: false,
+    debug: false,
+    stream: false,
     mode: "",
     approval: "",
     tools: "",
@@ -231,6 +237,18 @@ function parseCliArgs(argv) {
       continue;
     }
 
+    if (a === "--config") {
+      opts.configPath = argv[i + 1] || opts.configPath;
+      i += 1;
+      continue;
+    }
+
+    if (a === "--auth-config") {
+      opts.authConfigPath = argv[i + 1] || opts.authConfigPath;
+      i += 1;
+      continue;
+    }
+
     if (a === "--log") {
       opts.log = true;
       continue;
@@ -249,6 +267,22 @@ function parseCliArgs(argv) {
 
     if (a === "--unsafe") {
       opts.unsafe = true;
+      continue;
+    }
+
+    if (a === "--verbose") {
+      opts.verbose = true;
+      continue;
+    }
+
+    if (a === "--debug") {
+      opts.debug = true;
+      opts.verbose = true;
+      continue;
+    }
+
+    if (a === "--stream") {
+      opts.stream = true;
       continue;
     }
 
@@ -318,9 +352,14 @@ function printHelp() {
     "Options:",
     "  -m, --message <text>   Model prompt (required)",
     "  --model <name>         Model or provider/model",
+    "  --config <path>        Path to agent.json (default: ./agent.json)",
+    "  --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)",
     "  --json                 Output JSON with tool details",
     "  --log                  Log errors to file (default off)",
     "  --log-file <path>      Log file path (default: ./agent.js.log)",
+    "  --verbose              Print additional runtime diagnostics",
+    "  --debug                Print verbose diagnostics (implies --verbose)",
+    "  --stream               Enable streaming output when supported",
     "  --mode <name>          Security mode (plan/build/unsafe)",
     "  --approval <name>      Approval mode (ask/auto/never)",
     "  --tools <name>         Tools mode (auto/on/off)",
@@ -333,11 +372,53 @@ function printHelp() {
     "  -h, --help             Show help",
     "",
     "Notes:",
-    "  - Auth config is read from ./agent.auth.json",
+    "  - Config defaults: ./agent.json and ./agent.auth.json",
     "  - Setup wizard: node agent-connect.js",
   ].join("\n");
 
   process.stdout.write(`${txt}\n`);
+}
+
+function redactSensitiveText(input) {
+  const text = input == null ? "" : String(input);
+  return text
+    .replace(/(Bearer\s+)[^\s"']+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:api[_-]?key|token|access_token|refresh_token)=)[^&\s]+/gi, "$1[REDACTED]")
+    .replace(/((?:api[_-]?key|token|access_token|refresh_token|authorization)\s*[:=]\s*["']?)[^"'\s,}]+/gi, "$1[REDACTED]")
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]+\b/g, "[REDACTED]");
+}
+
+function createLogger(opts) {
+  const verboseEnabled = !!(opts && opts.verbose);
+  const debugEnabled = !!(opts && opts.debug);
+  return {
+    verbose: (msg) => {
+      if (!verboseEnabled && !debugEnabled) return;
+      process.stderr.write(`[verbose] ${redactSensitiveText(msg)}\n`);
+    },
+    debug: (msg) => {
+      if (!debugEnabled) return;
+      process.stderr.write(`[debug] ${redactSensitiveText(msg)}\n`);
+    },
+  };
+}
+
+function getErrorCode(err, fallbackCode) {
+  if (err && typeof err.code === "string" && err.code) return err.code;
+  return fallbackCode;
+}
+
+function getExitCodeForError(err) {
+  const code = getErrorCode(err, ERROR_CODES.RUNTIME_ERROR);
+  if (code === ERROR_CODES.AGENT_CONFIG_INVALID || code === ERROR_CODES.AGENT_CONFIG_ERROR) return 2;
+  if (code === ERROR_CODES.AUTH_CONFIG_INVALID || code === ERROR_CODES.AUTH_CONFIG_ERROR) return 3;
+  if (code === ERROR_CODES.PROVIDER_NOT_CONFIGURED) return 4;
+  if (code === ERROR_CODES.INTERACTIVE_APPROVAL_JSON || code === ERROR_CODES.INTERACTIVE_APPROVAL_TTY) return 5;
+  if (code === ERROR_CODES.TOOLS_NOT_SUPPORTED || code === ERROR_CODES.VISION_NOT_SUPPORTED) return 6;
+  if (code === ERROR_CODES.FETCH_TIMEOUT) return 7;
+  if (code === ERROR_CODES.RETRY_EXHAUSTED) return 8;
+  if (String(code).startsWith("ATTACHMENT_")) return 9;
+  return 1;
 }
 
 /**
@@ -348,8 +429,8 @@ function appendErrorLog(enabled, logFile, err) {
   if (!enabled) return;
   const fullPath = path.resolve(process.cwd(), logFile);
   const timestamp = new Date().toISOString();
-  const message = err && err.message ? err.message : String(err);
-  const stack = err && err.stack ? err.stack : "(no stack)";
+  const message = redactSensitiveText(err && err.message ? err.message : String(err));
+  const stack = redactSensitiveText(err && err.stack ? err.stack : "(no stack)");
   const line = `[${timestamp}] ERROR: ${message}\n${stack}\n\n`;
 
   try {
@@ -434,11 +515,12 @@ function defaultAgentConfig() {
 /**
  * Load agent.json (non-secret settings) and merge with defaults.
  */
-function loadAgentConfig() {
+function loadAgentConfig(configFilePath) {
   const defaults = defaultAgentConfig();
-  if (!fs.existsSync(AGENT_CONFIG_FILE)) return defaults;
+  const filePath = configFilePath || DEFAULT_AGENT_CONFIG_FILE;
+  if (!fs.existsSync(filePath)) return defaults;
 
-  const raw = fs.readFileSync(AGENT_CONFIG_FILE, "utf8");
+  const raw = fs.readFileSync(filePath, "utf8");
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -465,13 +547,14 @@ function loadAgentConfig() {
 }
 
 /**
- * Load provider configuration from AUTH_CONFIG_FILE.
+ * Load provider configuration from agent.auth.json path.
  * Returns null when file does not exist (supported for first-run UX).
  */
-function loadProviderConfig() {
-  if (!fs.existsSync(AUTH_CONFIG_FILE)) return null;
+function loadProviderConfig(authConfigFilePath) {
+  const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
+  if (!fs.existsSync(filePath)) return null;
 
-  const raw = fs.readFileSync(AUTH_CONFIG_FILE, "utf8");
+  const raw = fs.readFileSync(filePath, "utf8");
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -493,11 +576,12 @@ function loadProviderConfig() {
  * Persist provider config and enforce restrictive local file permissions.
  * This file contains plaintext secrets by design in this project.
  */
-function saveProviderConfig(config) {
+function saveProviderConfig(config, authConfigFilePath) {
+  const filePath = authConfigFilePath || DEFAULT_AUTH_CONFIG_FILE;
   const body = `${JSON.stringify(config, null, 2)}\n`;
-  fs.writeFileSync(AUTH_CONFIG_FILE, body, { mode: 0o600 });
+  fs.writeFileSync(filePath, body, { mode: 0o600 });
   try {
-    fs.chmodSync(AUTH_CONFIG_FILE, 0o600);
+    fs.chmodSync(filePath, 0o600);
   } catch {
     // skip chmod failure on unsupported platforms
   }
@@ -506,6 +590,14 @@ function saveProviderConfig(config) {
 function toAbsolutePath(inputPath) {
   if (!inputPath || typeof inputPath !== "string") return "";
   return path.isAbsolute(inputPath) ? inputPath : path.resolve(process.cwd(), inputPath);
+}
+
+/** Resolve effective config file paths from CLI options. */
+function resolveConfigPaths(opts) {
+  return {
+    agentConfigPath: toAbsolutePath(opts && opts.configPath) || DEFAULT_AGENT_CONFIG_FILE,
+    authConfigPath: toAbsolutePath(opts && opts.authConfigPath) || DEFAULT_AUTH_CONFIG_FILE,
+  };
 }
 
 function ensureReadableFile(filePath) {
@@ -858,6 +950,130 @@ function isVisionUnsupportedError(err) {
   );
 }
 
+function providerLikelySupportsStreaming(provider) {
+  const p = (provider || "").toLowerCase();
+  return (
+    p === "openai" ||
+    p === "copilot" ||
+    p === "openrouter" ||
+    p === "groq" ||
+    p === "mistral" ||
+    p === "deepseek" ||
+    p === "fireworks" ||
+    p === "moonshot" ||
+    p === "together" ||
+    p === "xai" ||
+    p === "perplexity"
+  );
+}
+
+function shouldUseStreaming(opts, runtime, toolsEnabled) {
+  if (!opts || !opts.stream) return false;
+  if (opts.json) return false;
+  if (toolsEnabled) return false;
+  const provider = runtime && runtime.provider ? runtime.provider : "";
+  return providerLikelySupportsStreaming(provider);
+}
+
+function isStreamUnsupportedError(err) {
+  const msg = err && err.message ? String(err.message).toLowerCase() : "";
+  return (
+    (msg.includes("stream") && msg.includes("not support")) ||
+    (msg.includes("stream") && msg.includes("unsupported")) ||
+    (msg.includes("stream") && msg.includes("invalid")) ||
+    msg.includes("unknown parameter: stream")
+  );
+}
+
+async function createChatCompletionStream(runtime, payload, logger, onText) {
+  const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
+  const res = await fetchWithRetry(`${base}/chat/completions`, {
+    method: "POST",
+    headers: Object.assign(
+      {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${runtime.apiKey}`,
+      },
+      runtime.defaultHeaders || {}
+    ),
+    body: JSON.stringify(Object.assign({}, payload, { stream: true })),
+  }, CHAT_FETCH_TIMEOUT_MS, {
+    logFn: logger && typeof logger.verbose === "function" ? logger.verbose : null,
+  });
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    const errMessage =
+      (json && json.error && (json.error.message || json.error.type)) ||
+      json.message ||
+      `HTTP ${res.status}`;
+    const err = new Error(`Chat completion failed: ${errMessage}`);
+    err.status = res.status;
+    throw err;
+  }
+
+  if (!res.body || typeof res.body.getReader !== "function") {
+    throw new Error("Streaming response body is not readable in this runtime.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || !line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (!data || data === "[DONE]") continue;
+
+      let evt;
+      try {
+        evt = JSON.parse(data);
+      } catch {
+        continue;
+      }
+
+      const delta = evt && evt.choices && evt.choices[0] ? evt.choices[0].delta : null;
+      if (!delta) continue;
+
+      if (typeof delta.content === "string") {
+        text += delta.content;
+        if (typeof onText === "function") onText(delta.content);
+        continue;
+      }
+
+      if (Array.isArray(delta.content)) {
+        for (const part of delta.content) {
+          if (part && typeof part.text === "string") {
+            text += part.text;
+            if (typeof onText === "function") onText(part.text);
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: text,
+        },
+      },
+    ],
+  };
+}
+
 function buildUserMessageContent(userText, attachments) {
   const hasImages = attachments.images.length > 0;
   const hasFiles = attachments.files.length > 0;
@@ -1170,7 +1386,7 @@ function isTokenStillValid(expiresAt, bufferMs) {
  * 2) fetch new copilotToken from GitHub token
  * 3) on 401, refresh GitHub token then fetch copilotToken again
  */
-async function ensureCopilotRuntimeToken(config, providerName, entry) {
+async function ensureCopilotRuntimeToken(config, providerName, entry, authConfigPath) {
   const adapter = buildCopilotAdapter(providerName, entry);
 
   if (isTokenStillValid(entry.copilotTokenExpiresAt, COPILOT_REFRESH_BUFFER_MS) && entry.copilotToken) {
@@ -1179,14 +1395,14 @@ async function ensureCopilotRuntimeToken(config, providerName, entry) {
 
   try {
     await fetchCopilotSessionToken(adapter, entry);
-    saveProviderConfig(config);
+    saveProviderConfig(config, authConfigPath);
     return { token: entry.copilotToken, baseUrl: adapter.api.baseUrl, headers: adapter.extraHeaders };
   } catch (err) {
     const status = err && typeof err.status === "number" ? err.status : 0;
     if (status === 401 && entry.githubRefreshToken) {
       await refreshGithubToken(adapter, entry);
       await fetchCopilotSessionToken(adapter, entry);
-      saveProviderConfig(config);
+      saveProviderConfig(config, authConfigPath);
       return { token: entry.copilotToken, baseUrl: adapter.api.baseUrl, headers: adapter.extraHeaders };
     }
 
@@ -1205,7 +1421,7 @@ async function ensureCopilotRuntimeToken(config, providerName, entry) {
  *
  * Supports openai-compatible providers and github_copilot provider kind.
  */
-async function createProviderRuntime(config, selection) {
+async function createProviderRuntime(config, selection, authConfigPath) {
   const providerName = selection.provider;
   const entry = getProviderEntry(config, providerName);
 
@@ -1249,7 +1465,7 @@ async function createProviderRuntime(config, selection) {
   }
 
   if (kind === "github_copilot") {
-    const runtime = await ensureCopilotRuntimeToken(config, providerName, entry);
+    const runtime = await ensureCopilotRuntimeToken(config, providerName, entry, authConfigPath);
     return {
       apiKey: runtime.token,
       baseURL: runtime.baseUrl,
@@ -1266,7 +1482,10 @@ async function createProviderRuntime(config, selection) {
  * Send OpenAI-compatible /chat/completions request via fetch.
  * Uses fetchWithRetry for automatic retry on transient server errors and rate limits.
  */
-async function createChatCompletion(runtime, payload) {
+async function createChatCompletion(runtime, payload, logger, useStream, onText) {
+  if (useStream) {
+    return createChatCompletionStream(runtime, payload, logger, onText);
+  }
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
   const res = await fetchWithRetry(`${base}/chat/completions`, {
     method: "POST",
@@ -1278,7 +1497,9 @@ async function createChatCompletion(runtime, payload) {
       runtime.defaultHeaders || {}
     ),
     body: JSON.stringify(payload),
-  }, CHAT_FETCH_TIMEOUT_MS);
+  }, CHAT_FETCH_TIMEOUT_MS, {
+    logFn: logger && typeof logger.verbose === "function" ? logger.verbose : null,
+  });
 
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -1329,6 +1550,9 @@ function applyEnvOverrides(opts) {
 async function main() {
   const start = Date.now();
   const opts = applyEnvOverrides(parseCliArgs(process.argv.slice(2)));
+  const paths = resolveConfigPaths(opts);
+  const logger = createLogger(opts);
+  logger.debug(`Resolved config paths: agent=${paths.agentConfigPath}, auth=${paths.authConfigPath}`);
 
   if (opts.help) {
     printHelp();
@@ -1353,22 +1577,23 @@ async function main() {
   let agentConfig = null;
   let providerConfig = null;
   try {
-    agentConfig = loadAgentConfig();
+    agentConfig = loadAgentConfig(paths.agentConfigPath);
   } catch (err) {
-    const e = new Error(`Failed to load agent.json: ${err.message}`);
+    const e = new Error(`Failed to load ${paths.agentConfigPath}: ${err.message}`);
     e.code = err && err.code ? err.code : ERROR_CODES.AGENT_CONFIG_ERROR;
     throw e;
   }
 
   try {
-    providerConfig = loadProviderConfig();
+    providerConfig = loadProviderConfig(paths.authConfigPath);
   } catch (err) {
-    const e = new Error(`Failed to load agent.auth.json: ${err.message}`);
+    const e = new Error(`Failed to load ${paths.authConfigPath}: ${err.message}`);
     e.code = err && err.code ? err.code : ERROR_CODES.AUTH_CONFIG_ERROR;
     throw e;
   }
 
   const selection = resolveModelSelection(opts, agentConfig, providerConfig);
+  logger.verbose(`Model selection: provider='${selection.provider || ""}' model='${selection.model || ""}'`);
   if (!selection.provider) {
     const e = new Error(
       "No provider configured. Start setup: node agent-connect.js | Or use --model <provider/model> (for example --model copilot/gpt-4o)."
@@ -1400,7 +1625,8 @@ async function main() {
     throw e;
   }
 
-  const runtime = await createProviderRuntime(providerConfig, selection);
+  const runtime = await createProviderRuntime(providerConfig, selection, paths.authConfigPath);
+  logger.debug(`Runtime resolved: provider='${runtime.provider}' model='${runtime.model}' base='${runtime.baseURL}'`);
 
   const tools = [
     {
@@ -1434,6 +1660,7 @@ async function main() {
 
   const toolCalls = [];
   let finalText = "";
+  let streamedFinalOutput = false;
   let toolsEnabled = toolsMode !== "off";
   let toolsFallbackUsed = false;
   const maxTurns = 5;
@@ -1450,9 +1677,42 @@ async function main() {
     }
 
     let completion;
+    let completionError = null;
+    const streamThisTurn = shouldUseStreaming(opts, runtime, toolsEnabled);
+    if (streamThisTurn) {
+      logger.verbose("Using streaming response mode for this turn.");
+    }
     try {
-      completion = await createChatCompletion(runtime, request);
+      completion = await createChatCompletion(
+        runtime,
+        request,
+        logger,
+        streamThisTurn,
+        streamThisTurn
+          ? (chunk) => {
+              process.stdout.write(chunk);
+            }
+          : null
+      );
+      if (streamThisTurn) {
+        process.stdout.write("\n");
+        streamedFinalOutput = true;
+      }
     } catch (err) {
+      if (streamThisTurn && isStreamUnsupportedError(err)) {
+        logger.verbose("Streaming is unsupported for this provider/model. Falling back to non-stream request.");
+        try {
+          completion = await createChatCompletion(runtime, request, logger, false);
+        } catch (fallbackErr) {
+          completionError = fallbackErr;
+        }
+      } else {
+        completionError = err;
+      }
+    }
+
+    if (!completion) {
+      const err = completionError || new Error("Completion failed.");
       if (toolsMode === "auto" && toolsEnabled && isToolUnsupportedError(err)) {
         toolsEnabled = false;
         toolsFallbackUsed = true;
@@ -1543,7 +1803,9 @@ async function main() {
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
   } else {
-    process.stdout.write(`${payload.message || "(keine Antwort)"}\n`);
+    if (!streamedFinalOutput) {
+      process.stdout.write(`${payload.message || "(keine Antwort)"}\n`);
+    }
   }
 }
 
@@ -1561,16 +1823,18 @@ if (require.main === module) {
     const opts = parseCliArgs(process.argv.slice(2));
     appendErrorLog(opts.log, opts.logFile, err);
 
-    const msg = err && err.message ? err.message : String(err);
+    const code = getErrorCode(err, ERROR_CODES.RUNTIME_ERROR);
+    const exitCode = getExitCodeForError(err);
+    const msg = redactSensitiveText(err && err.message ? err.message : String(err));
     if (opts.json) {
       process.stdout.write(
-        `${JSON.stringify({ ok: false, error: msg, code: err && err.code ? err.code : ERROR_CODES.RUNTIME_ERROR }, null, 2)}\n`
+        `${JSON.stringify({ ok: false, error: msg, code }, null, 2)}\n`
       );
     } else {
-      process.stderr.write(`Error: ${msg}\n`);
+      process.stderr.write(`Error [${code}]: ${msg}\n`);
     }
 
-    process.exit(1);
+    process.exit(exitCode);
   });
 }
 
@@ -1581,6 +1845,11 @@ module.exports = {
   fetchWithRetry,
   parseCliArgs,
   applyEnvOverrides,
+  resolveConfigPaths,
+  redactSensitiveText,
+  createLogger,
+  getErrorCode,
+  getExitCodeForError,
   defaultAgentConfig,
   splitProviderModel,
   resolveModelSelection,
@@ -1594,6 +1863,9 @@ module.exports = {
   isToolUnsupportedError,
   modelLikelySupportsVision,
   isVisionUnsupportedError,
+  providerLikelySupportsStreaming,
+  shouldUseStreaming,
+  isStreamUnsupportedError,
   buildUserMessageContent,
   extractAssistantText,
   detectImageMime,
