@@ -4,6 +4,37 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [0.9.0] - 2026-02-13
+
+### Added
+- stdin prompt support: when `-m/--message` is omitted, `agent.js` now reads the prompt from stdin (pipe mode)
+- Configurable tool command timeout for `run_command` execution:
+  - `runtime.commandTimeoutMs` in `agent.json` (default `10000`)
+  - `--command-timeout <ms>` CLI override
+  - `AGENT_COMMAND_TIMEOUT` env override
+- Base URL validation for providers:
+  - supports `https://` everywhere
+  - allows `http://` for local/private hosts (`localhost`, loopback, RFC1918)
+  - supports explicit override with `--allow-insecure-http` / `AGENT_ALLOW_INSECURE_HTTP`
+- New error codes in `agent.js`:
+  - `INVALID_BASE_URL`
+  - `INSECURE_BASE_URL`
+
+### Changed
+- `createProviderRuntime()` now validates provider base URLs before requests
+- `runCommandTool()` now uses resolved command timeout instead of fixed 10s
+- Version bumped from `0.8.0` to `0.9.0` in `agent.js`, `agent-connect.js`, and `package.json`
+- Test count increased from 215 to 231
+
+### Tests
+- Added tests for:
+  - new CLI flags (`--command-timeout`, `--allow-insecure-http`)
+  - timeout resolution precedence and bounds
+  - local/private HTTP host detection
+  - provider base URL validation rules
+  - stdin message resolution behavior
+  - new env override behavior (`AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`)
+
 ## [0.8.0] - 2026-02-13
 
 ### Added

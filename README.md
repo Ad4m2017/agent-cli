@@ -182,8 +182,16 @@ Options:
   --verbose              Print additional runtime diagnostics
   --debug                Print detailed diagnostics (implies --verbose)
   --stream               Stream assistant text output when supported
+  --command-timeout <ms> Tool command timeout in milliseconds
+  --allow-insecure-http  Allow non-local HTTP provider base URLs
   -V, --version          Show version
   -h, --help             Show help
+```
+
+If `-m/--message` is omitted, agent-cli reads the prompt from stdin:
+
+```bash
+cat prompt.txt | node agent.js --approval auto
 ```
 
 ### agent-connect.js
@@ -270,6 +278,8 @@ node agent.js -m "Fix the failing test" --model openai/gpt-4.1 --approval auto
 | `TOOLS_NOT_SUPPORTED` | `--tools on` with incompatible model | Use `--tools auto` or `--no-tools` |
 | `FETCH_TIMEOUT` | Provider request exceeded timeout | Retry, or use another provider/model |
 | `RETRY_EXHAUSTED` | Transient retries failed repeatedly | Check provider status/network and retry |
+| `INSECURE_BASE_URL` | Public `http://` base URL blocked | Use `https://`, local/private host, or `--allow-insecure-http` |
+| `INVALID_BASE_URL` | Provider base URL is malformed/unsupported | Fix `baseUrl` in config |
 | `COPILOT_DEVICE_CODE_EXPIRED` | OAuth code timed out | Re-run `node agent-connect.js --provider copilot` |
 | `ATTACHMENT_TOO_LARGE` | File > 200KB or image > 5MB | Use a smaller file or split it |
 | `AUTH_CONFIG_INVALID` | Corrupted `agent.auth.json` | Delete the file and re-run `node agent-connect.js` |
@@ -305,7 +315,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `0.8.0` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `0.9.0` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

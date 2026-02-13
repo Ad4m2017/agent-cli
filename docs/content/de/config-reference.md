@@ -77,6 +77,8 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 - `defaultMode` (`string`: `"plan"`, `"build"`, `"unsafe"`) -- Sicherheitsmodus wenn `--mode` nicht uebergeben wird. Standard: `"build"`.
 - `defaultApprovalMode` (`string`: `"ask"`, `"auto"`, `"never"`) -- Freigabemodus wenn `--approval` nicht uebergeben wird. Standard: `"ask"`.
 - `defaultToolsMode` (`string`: `"auto"`, `"on"`, `"off"`) -- Tools-Modus wenn `--tools` nicht uebergeben wird. Standard: `"auto"`.
+- `commandTimeoutMs` (`number`) -- Timeout fuer Tool-Command-Ausfuehrung (`run_command`) in Millisekunden. Standard: `10000`.
+- `allowInsecureHttp` (`boolean`) -- Erlaubt nicht-lokale `http://` Provider-Base-URLs wenn true. Standard: `false`.
 - `approvalTimeoutMs` (`number`, optional) -- Timeout in Millisekunden fuer die interaktive Freigabe-Abfrage. 0 oder weggelassen bedeutet kein Timeout.
 
 ### security
@@ -246,6 +248,8 @@ Wenn alle Tokens abgelaufen sind und der Refresh fehlschlaegt: `node agent-conne
 - `FETCH_TIMEOUT` -- Provider-Anfrage hat Timeout erreicht
 - `RETRY_EXHAUSTED` -- Alle Retry-Versuche bei transientem Provider-Fehler fehlgeschlagen
 - `RUNTIME_ERROR` -- Unbehandelter Laufzeitfehler
+- `INVALID_BASE_URL` -- Provider-`baseUrl` ist ungueltig oder Protokoll nicht unterstuetzt
+- `INSECURE_BASE_URL` -- Oeffentliche `http://` Base-URL ohne Insecure-Override abgelehnt
 
 ### agent-connect.js Fehler
 
@@ -283,7 +287,7 @@ agent-cli nutzt jetzt stabile Prozess-Exit-Codes fuer Automation:
 Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):
 
 1. CLI-Flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`)
-2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`)
+2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`)
 3. `agent.json` Runtime-Defaults
 4. `agent.auth.json` Defaults (`defaultProvider`, `defaultModel`)
 5. Hardcodierte Fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)

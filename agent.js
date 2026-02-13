@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "0.8.0";
+const AGENT_VERSION = "0.9.0";
 const MAX_FILE_BYTES = 200 * 1024;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 10;
@@ -38,6 +38,8 @@ const ERROR_CODES = {
   AGENT_CONFIG_ERROR: "AGENT_CONFIG_ERROR",
   AUTH_CONFIG_INVALID: "AUTH_CONFIG_INVALID",
   AUTH_CONFIG_ERROR: "AUTH_CONFIG_ERROR",
+  INVALID_BASE_URL: "INVALID_BASE_URL",
+  INSECURE_BASE_URL: "INSECURE_BASE_URL",
   ATTACHMENT_NOT_FOUND: "ATTACHMENT_NOT_FOUND",
   ATTACHMENT_UNREADABLE: "ATTACHMENT_UNREADABLE",
   ATTACHMENT_TOO_MANY_FILES: "ATTACHMENT_TOO_MANY_FILES",
@@ -212,6 +214,8 @@ function parseCliArgs(argv) {
     verbose: false,
     debug: false,
     stream: false,
+    allowInsecureHttp: false,
+    commandTimeoutMs: null,
     mode: "",
     approval: "",
     tools: "",
@@ -283,6 +287,19 @@ function parseCliArgs(argv) {
 
     if (a === "--stream") {
       opts.stream = true;
+      continue;
+    }
+
+    if (a === "--allow-insecure-http") {
+      opts.allowInsecureHttp = true;
+      continue;
+    }
+
+    if (a === "--command-timeout") {
+      const raw = argv[i + 1] || "";
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) opts.commandTimeoutMs = parsed;
+      i += 1;
       continue;
     }
 
@@ -360,6 +377,8 @@ function printHelp() {
     "  --verbose              Print additional runtime diagnostics",
     "  --debug                Print verbose diagnostics (implies --verbose)",
     "  --stream               Enable streaming output when supported",
+    "  --allow-insecure-http  Allow non-local HTTP provider URLs",
+    "  --command-timeout <ms> Tool command timeout in milliseconds",
     "  --mode <name>          Security mode (plan/build/unsafe)",
     "  --approval <name>      Approval mode (ask/auto/never)",
     "  --tools <name>         Tools mode (auto/on/off)",
@@ -372,6 +391,7 @@ function printHelp() {
     "  -h, --help             Show help",
     "",
     "Notes:",
+    "  - If -m/--message is omitted, prompt is read from stdin (pipe mode)",
     "  - Config defaults: ./agent.json and ./agent.auth.json",
     "  - Setup wizard: node agent-connect.js",
   ].join("\n");
@@ -412,7 +432,7 @@ function getExitCodeForError(err) {
   const code = getErrorCode(err, ERROR_CODES.RUNTIME_ERROR);
   if (code === ERROR_CODES.AGENT_CONFIG_INVALID || code === ERROR_CODES.AGENT_CONFIG_ERROR) return 2;
   if (code === ERROR_CODES.AUTH_CONFIG_INVALID || code === ERROR_CODES.AUTH_CONFIG_ERROR) return 3;
-  if (code === ERROR_CODES.PROVIDER_NOT_CONFIGURED) return 4;
+  if (code === ERROR_CODES.PROVIDER_NOT_CONFIGURED || code === ERROR_CODES.INVALID_BASE_URL || code === ERROR_CODES.INSECURE_BASE_URL) return 4;
   if (code === ERROR_CODES.INTERACTIVE_APPROVAL_JSON || code === ERROR_CODES.INTERACTIVE_APPROVAL_TTY) return 5;
   if (code === ERROR_CODES.TOOLS_NOT_SUPPORTED || code === ERROR_CODES.VISION_NOT_SUPPORTED) return 6;
   if (code === ERROR_CODES.FETCH_TIMEOUT) return 7;
@@ -447,12 +467,14 @@ function appendErrorLog(enabled, logFile, err) {
 function defaultAgentConfig() {
   return {
     version: 1,
-    runtime: {
+  runtime: {
       defaultProvider: "",
       defaultModel: "",
       defaultMode: "build",
       defaultApprovalMode: "ask",
       defaultToolsMode: "auto",
+      commandTimeoutMs: 10000,
+      allowInsecureHttp: false,
     },
     security: {
       mode: "build",
@@ -681,6 +703,84 @@ function resolveConfigPaths(opts) {
     agentConfigPath: toAbsolutePath(opts && opts.configPath) || DEFAULT_AGENT_CONFIG_FILE,
     authConfigPath: toAbsolutePath(opts && opts.authConfigPath) || DEFAULT_AUTH_CONFIG_FILE,
   };
+}
+
+function resolveCommandTimeoutMs(opts, agentConfig) {
+  const cliValue = opts && Number.isFinite(Number(opts.commandTimeoutMs)) ? Number(opts.commandTimeoutMs) : NaN;
+  const cfgValue =
+    agentConfig && agentConfig.runtime && Number.isFinite(Number(agentConfig.runtime.commandTimeoutMs))
+      ? Number(agentConfig.runtime.commandTimeoutMs)
+      : NaN;
+  const raw = Number.isFinite(cliValue) ? cliValue : Number.isFinite(cfgValue) ? cfgValue : 10000;
+  const rounded = Math.round(raw);
+  if (!Number.isFinite(rounded) || rounded <= 0) return 10000;
+  if (rounded < 100) return 100;
+  if (rounded > 600000) return 600000;
+  return rounded;
+}
+
+function isLocalOrPrivateHttpHost(hostname) {
+  const host = (hostname || "").toLowerCase();
+  if (!host) return false;
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") return true;
+  if (host.endsWith(".local")) return true;
+
+  const parts = host.split(".");
+  if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p))) {
+    const a = Number(parts[0]);
+    const b = Number(parts[1]);
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+  }
+
+  return false;
+}
+
+function validateProviderBaseUrl(baseUrl, opts, providerName) {
+  let parsed;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    const e = new Error(`Provider '${providerName}' has invalid baseUrl: ${baseUrl}`);
+    e.code = ERROR_CODES.INVALID_BASE_URL;
+    throw e;
+  }
+
+  const protocol = parsed.protocol.toLowerCase();
+  if (protocol === "https:") return parsed.toString().replace(/\/$/, "");
+  if (protocol !== "http:") {
+    const e = new Error(`Provider '${providerName}' uses unsupported protocol in baseUrl: ${baseUrl}`);
+    e.code = ERROR_CODES.INVALID_BASE_URL;
+    throw e;
+  }
+
+  const allowInsecureHttp = !!(opts && opts.allowInsecureHttp);
+  if (allowInsecureHttp || isLocalOrPrivateHttpHost(parsed.hostname)) {
+    return parsed.toString().replace(/\/$/, "");
+  }
+
+  const e = new Error(
+    `Provider '${providerName}' uses insecure HTTP baseUrl: ${baseUrl}. Use HTTPS, local/private host, or --allow-insecure-http.`
+  );
+  e.code = ERROR_CODES.INSECURE_BASE_URL;
+  throw e;
+}
+
+async function readStdinText() {
+  if (process.stdin.isTTY) return "";
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+  }
+  return chunks.join("");
+}
+
+function resolveInputMessage(opts, stdinText) {
+  if (opts && typeof opts.message === "string" && opts.message.trim()) return opts.message;
+  if (typeof stdinText === "string" && stdinText.trim()) return stdinText.trimEnd();
+  return "";
 }
 
 function ensureReadableFile(filePath) {
@@ -1284,11 +1384,12 @@ async function runCommandTool(args, options, agentConfig) {
 
   const file = parts[0];
   const execArgs = parts.slice(1);
+  const commandTimeoutMs = resolveCommandTimeoutMs(options, agentConfig);
 
   try {
     const { stdout, stderr } = await execFileAsync(file, execArgs, {
       cwd: process.cwd(),
-      timeout: 10000,
+      timeout: commandTimeoutMs,
       maxBuffer: 1024 * 1024,
     });
     return {
@@ -1504,7 +1605,7 @@ async function ensureCopilotRuntimeToken(config, providerName, entry, authConfig
  *
  * Supports openai-compatible providers and github_copilot provider kind.
  */
-async function createProviderRuntime(config, selection, authConfigPath) {
+async function createProviderRuntime(config, selection, authConfigPath, opts) {
   const providerName = selection.provider;
   const entry = getProviderEntry(config, providerName);
 
@@ -1513,9 +1614,10 @@ async function createProviderRuntime(config, selection, authConfigPath) {
   if (!entry) {
     const envApiKey = process.env.AGENT_API_KEY || "";
     if (envApiKey) {
+      const baseURL = validateProviderBaseUrl("https://api.openai.com/v1", opts, providerName);
       return {
         apiKey: envApiKey,
-        baseURL: "https://api.openai.com/v1",
+        baseURL,
         defaultHeaders: {},
         model: selection.model,
         provider: providerName,
@@ -1537,10 +1639,10 @@ async function createProviderRuntime(config, selection, authConfigPath) {
       throw new Error(`Provider '${providerName}' is missing apiKey. Set AGENT_API_KEY env var or configure via agent-connect.js.`);
     }
 
-    const baseURL = entry.baseUrl || undefined;
+    const baseURL = validateProviderBaseUrl(entry.baseUrl || "https://api.openai.com/v1", opts, providerName);
     return {
       apiKey,
-      baseURL: baseURL || "https://api.openai.com/v1",
+      baseURL,
       defaultHeaders: {},
       model: selection.model,
       provider: providerName,
@@ -1549,9 +1651,10 @@ async function createProviderRuntime(config, selection, authConfigPath) {
 
   if (kind === "github_copilot") {
     const runtime = await ensureCopilotRuntimeToken(config, providerName, entry, authConfigPath);
+    const baseURL = validateProviderBaseUrl(runtime.baseUrl, opts, providerName);
     return {
       apiKey: runtime.token,
-      baseURL: runtime.baseUrl,
+      baseURL,
       defaultHeaders: runtime.headers,
       model: selection.model,
       provider: providerName,
@@ -1614,6 +1717,8 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
  *   AGENT_API_KEY  - API key (overrides agent.auth.json)
  *   AGENT_MODE     - security mode: plan | build | unsafe
  *   AGENT_APPROVAL - approval mode: ask | auto | never
+ *   AGENT_COMMAND_TIMEOUT - tool command timeout (ms)
+ *   AGENT_ALLOW_INSECURE_HTTP - allow non-local HTTP base URLs (1/true/yes)
  *
  * Returns a new opts object (does not mutate the input).
  */
@@ -1622,10 +1727,18 @@ function applyEnvOverrides(opts) {
   const envModel = process.env.AGENT_MODEL || "";
   const envMode = process.env.AGENT_MODE || "";
   const envApproval = process.env.AGENT_APPROVAL || "";
+  const envCommandTimeout = Number(process.env.AGENT_COMMAND_TIMEOUT || "");
+  const envAllowInsecureHttp = (process.env.AGENT_ALLOW_INSECURE_HTTP || "").trim().toLowerCase();
 
   if (!out.model && envModel) out.model = envModel;
   if (!out.mode && envMode) out.mode = envMode;
   if (!out.approval && envApproval) out.approval = envApproval;
+  if ((out.commandTimeoutMs == null || out.commandTimeoutMs === "") && Number.isFinite(envCommandTimeout)) {
+    out.commandTimeoutMs = envCommandTimeout;
+  }
+  if (!out.allowInsecureHttp && (envAllowInsecureHttp === "1" || envAllowInsecureHttp === "true" || envAllowInsecureHttp === "yes")) {
+    out.allowInsecureHttp = true;
+  }
 
   return out;
 }
@@ -1646,6 +1759,9 @@ async function main() {
     process.stdout.write(`${AGENT_VERSION}\n`);
     process.exit(0);
   }
+
+  const stdinText = opts.message ? "" : await readStdinText();
+  opts.message = resolveInputMessage(opts, stdinText);
 
   if (!opts.message) {
     const msg = "Missing required -m/--message. Use --help for usage.";
@@ -1708,7 +1824,7 @@ async function main() {
     throw e;
   }
 
-  const runtime = await createProviderRuntime(providerConfig, selection, paths.authConfigPath);
+  const runtime = await createProviderRuntime(providerConfig, selection, paths.authConfigPath, opts);
   logger.debug(`Runtime resolved: provider='${runtime.provider}' model='${runtime.model}' base='${runtime.baseURL}'`);
 
   const tools = [
@@ -1929,6 +2045,11 @@ module.exports = {
   parseCliArgs,
   applyEnvOverrides,
   resolveConfigPaths,
+  resolveCommandTimeoutMs,
+  isLocalOrPrivateHttpHost,
+  validateProviderBaseUrl,
+  readStdinText,
+  resolveInputMessage,
   validateConfigPath,
   writeJsonAtomic,
   redactSensitiveText,

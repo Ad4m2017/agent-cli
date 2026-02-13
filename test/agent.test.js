@@ -17,6 +17,10 @@ const {
   parseCliArgs,
   applyEnvOverrides,
   resolveConfigPaths,
+  resolveCommandTimeoutMs,
+  isLocalOrPrivateHttpHost,
+  validateProviderBaseUrl,
+  resolveInputMessage,
   validateConfigPath,
   writeJsonAtomic,
   redactSensitiveText,
@@ -60,6 +64,8 @@ describe("ERROR_CODES", () => {
       "AGENT_CONFIG_ERROR",
       "AUTH_CONFIG_INVALID",
       "AUTH_CONFIG_ERROR",
+      "INVALID_BASE_URL",
+      "INSECURE_BASE_URL",
       "ATTACHMENT_NOT_FOUND",
       "ATTACHMENT_UNREADABLE",
       "ATTACHMENT_TOO_MANY_FILES",
@@ -103,6 +109,8 @@ describe("parseCliArgs", () => {
     assert.equal(opts.verbose, false);
     assert.equal(opts.debug, false);
     assert.equal(opts.stream, false);
+    assert.equal(opts.allowInsecureHttp, false);
+    assert.equal(opts.commandTimeoutMs, null);
     assert.equal(opts.mode, "");
     assert.equal(opts.approval, "");
     assert.equal(opts.tools, "");
@@ -143,6 +151,12 @@ describe("parseCliArgs", () => {
     assert.equal(debug.verbose, true);
     const stream = parseCliArgs(["--stream"]);
     assert.equal(stream.stream, true);
+  });
+
+  it("parses --allow-insecure-http and --command-timeout", () => {
+    const opts = parseCliArgs(["--allow-insecure-http", "--command-timeout", "15000"]);
+    assert.equal(opts.allowInsecureHttp, true);
+    assert.equal(opts.commandTimeoutMs, 15000);
   });
 
   it("parses --log-file", () => {
@@ -206,6 +220,8 @@ describe("defaultAgentConfig", () => {
     assert.equal(cfg.runtime.defaultMode, "build");
     assert.equal(cfg.runtime.defaultApprovalMode, "ask");
     assert.equal(cfg.runtime.defaultToolsMode, "auto");
+    assert.equal(cfg.runtime.commandTimeoutMs, 10000);
+    assert.equal(cfg.runtime.allowInsecureHttp, false);
   });
 
   it("returns fresh object each call (no shared reference)", () => {
@@ -927,6 +943,81 @@ describe("resolveConfigPaths", () => {
   });
 });
 
+describe("resolveCommandTimeoutMs", () => {
+  it("uses default timeout when not configured", () => {
+    assert.equal(resolveCommandTimeoutMs({}, { runtime: {} }), 10000);
+  });
+
+  it("uses config timeout when CLI override missing", () => {
+    assert.equal(resolveCommandTimeoutMs({}, { runtime: { commandTimeoutMs: 25000 } }), 25000);
+  });
+
+  it("CLI timeout overrides config timeout", () => {
+    assert.equal(resolveCommandTimeoutMs({ commandTimeoutMs: 5000 }, { runtime: { commandTimeoutMs: 25000 } }), 5000);
+  });
+
+  it("applies lower and upper bounds", () => {
+    assert.equal(resolveCommandTimeoutMs({ commandTimeoutMs: 1 }, {}), 100);
+    assert.equal(resolveCommandTimeoutMs({ commandTimeoutMs: 9999999 }, {}), 600000);
+  });
+});
+
+describe("isLocalOrPrivateHttpHost", () => {
+  it("accepts localhost and private ranges", () => {
+    assert.equal(isLocalOrPrivateHttpHost("localhost"), true);
+    assert.equal(isLocalOrPrivateHttpHost("127.0.0.1"), true);
+    assert.equal(isLocalOrPrivateHttpHost("10.0.0.5"), true);
+    assert.equal(isLocalOrPrivateHttpHost("172.16.10.20"), true);
+    assert.equal(isLocalOrPrivateHttpHost("192.168.1.12"), true);
+  });
+
+  it("rejects public hostnames", () => {
+    assert.equal(isLocalOrPrivateHttpHost("api.openai.com"), false);
+  });
+});
+
+describe("validateProviderBaseUrl", () => {
+  it("accepts https URLs", () => {
+    const out = validateProviderBaseUrl("https://api.openai.com/v1", {}, "openai");
+    assert.equal(out, "https://api.openai.com/v1");
+  });
+
+  it("accepts local http URLs without insecure override", () => {
+    const out = validateProviderBaseUrl("http://localhost:11434/v1", {}, "ollama");
+    assert.equal(out, "http://localhost:11434/v1");
+  });
+
+  it("rejects public http URLs unless override is enabled", () => {
+    assert.throws(
+      () => validateProviderBaseUrl("http://example.com/v1", { allowInsecureHttp: false }, "openai"),
+      (err) => err && err.code === ERROR_CODES.INSECURE_BASE_URL
+    );
+    const out = validateProviderBaseUrl("http://example.com/v1", { allowInsecureHttp: true }, "openai");
+    assert.equal(out, "http://example.com/v1");
+  });
+
+  it("throws INVALID_BASE_URL for malformed URLs", () => {
+    assert.throws(
+      () => validateProviderBaseUrl("not-a-url", {}, "openai"),
+      (err) => err && err.code === ERROR_CODES.INVALID_BASE_URL
+    );
+  });
+});
+
+describe("resolveInputMessage", () => {
+  it("prefers CLI message over stdin", () => {
+    assert.equal(resolveInputMessage({ message: "from-cli" }, "from-stdin"), "from-cli");
+  });
+
+  it("uses stdin message when CLI message is empty", () => {
+    assert.equal(resolveInputMessage({ message: "" }, "from-stdin\n"), "from-stdin");
+  });
+
+  it("returns empty string when both are empty", () => {
+    assert.equal(resolveInputMessage({ message: "" }, "   \n"), "");
+  });
+});
+
 // ---------------------------------------------------------------------------
 // validateConfigPath / writeJsonAtomic
 // ---------------------------------------------------------------------------
@@ -1323,14 +1414,42 @@ describe("applyEnvOverrides", () => {
     }
   });
 
+  it("applies AGENT_COMMAND_TIMEOUT when CLI timeout is missing", () => {
+    const original = process.env.AGENT_COMMAND_TIMEOUT;
+    try {
+      process.env.AGENT_COMMAND_TIMEOUT = "25000";
+      const result = applyEnvOverrides({ commandTimeoutMs: null });
+      assert.equal(result.commandTimeoutMs, 25000);
+    } finally {
+      if (original === undefined) delete process.env.AGENT_COMMAND_TIMEOUT;
+      else process.env.AGENT_COMMAND_TIMEOUT = original;
+    }
+  });
+
+  it("applies AGENT_ALLOW_INSECURE_HTTP when CLI flag is false", () => {
+    const original = process.env.AGENT_ALLOW_INSECURE_HTTP;
+    try {
+      process.env.AGENT_ALLOW_INSECURE_HTTP = "true";
+      const result = applyEnvOverrides({ allowInsecureHttp: false });
+      assert.equal(result.allowInsecureHttp, true);
+    } finally {
+      if (original === undefined) delete process.env.AGENT_ALLOW_INSECURE_HTTP;
+      else process.env.AGENT_ALLOW_INSECURE_HTTP = original;
+    }
+  });
+
   it("returns unchanged opts when no env vars are set", () => {
     const originalModel = process.env.AGENT_MODEL;
     const originalMode = process.env.AGENT_MODE;
     const originalApproval = process.env.AGENT_APPROVAL;
+    const originalTimeout = process.env.AGENT_COMMAND_TIMEOUT;
+    const originalAllowHttp = process.env.AGENT_ALLOW_INSECURE_HTTP;
     try {
       delete process.env.AGENT_MODEL;
       delete process.env.AGENT_MODE;
       delete process.env.AGENT_APPROVAL;
+      delete process.env.AGENT_COMMAND_TIMEOUT;
+      delete process.env.AGENT_ALLOW_INSECURE_HTTP;
       const result = applyEnvOverrides({ model: "", mode: "", approval: "", message: "test" });
       assert.equal(result.model, "");
       assert.equal(result.mode, "");
@@ -1343,6 +1462,10 @@ describe("applyEnvOverrides", () => {
       else process.env.AGENT_MODE = originalMode;
       if (originalApproval === undefined) delete process.env.AGENT_APPROVAL;
       else process.env.AGENT_APPROVAL = originalApproval;
+      if (originalTimeout === undefined) delete process.env.AGENT_COMMAND_TIMEOUT;
+      else process.env.AGENT_COMMAND_TIMEOUT = originalTimeout;
+      if (originalAllowHttp === undefined) delete process.env.AGENT_ALLOW_INSECURE_HTTP;
+      else process.env.AGENT_ALLOW_INSECURE_HTTP = originalAllowHttp;
     }
   });
 });
@@ -1446,6 +1569,8 @@ describe("getExitCodeForError", () => {
 
   it("maps provider and runtime class errors", () => {
     assert.equal(getExitCodeForError({ code: ERROR_CODES.PROVIDER_NOT_CONFIGURED }), 4);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.INVALID_BASE_URL }), 4);
+    assert.equal(getExitCodeForError({ code: ERROR_CODES.INSECURE_BASE_URL }), 4);
     assert.equal(getExitCodeForError({ code: ERROR_CODES.INTERACTIVE_APPROVAL_TTY }), 5);
     assert.equal(getExitCodeForError({ code: ERROR_CODES.TOOLS_NOT_SUPPORTED }), 6);
   });

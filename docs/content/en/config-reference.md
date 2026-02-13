@@ -77,6 +77,8 @@ This file controls runtime behavior and security policy. It is created with sens
 - `defaultMode` (`string`: `"plan"`, `"build"`, `"unsafe"`) -- Security mode applied when `--mode` is not passed. Default: `"build"`.
 - `defaultApprovalMode` (`string`: `"ask"`, `"auto"`, `"never"`) -- Approval mode applied when `--approval` is not passed. Default: `"ask"`.
 - `defaultToolsMode` (`string`: `"auto"`, `"on"`, `"off"`) -- Tools mode applied when `--tools` is not passed. Default: `"auto"`.
+- `commandTimeoutMs` (`number`) -- Timeout for tool command execution (`run_command`) in milliseconds. Default: `10000`.
+- `allowInsecureHttp` (`boolean`) -- Allows non-local `http://` provider base URLs when true. Default: `false`.
 - `approvalTimeoutMs` (`number`, optional) -- Timeout in milliseconds for the interactive approval prompt. 0 or omitted means no timeout.
 
 ### security
@@ -246,6 +248,8 @@ If all tokens are expired and refresh fails, re-run `node agent-connect.js --pro
 - `FETCH_TIMEOUT` -- Provider request exceeded timeout
 - `RETRY_EXHAUSTED` -- All retry attempts failed for a transient provider error
 - `RUNTIME_ERROR` -- Unhandled runtime error
+- `INVALID_BASE_URL` -- Provider `baseUrl` is malformed or protocol is unsupported
+- `INSECURE_BASE_URL` -- Public `http://` base URL rejected without insecure override
 
 ### agent-connect.js Errors
 
@@ -283,7 +287,7 @@ agent-cli now uses stable process exit codes for automation:
 Configuration values are resolved in this order (first wins):
 
 1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`)
-2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`)
+2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`)
 3. `agent.json` runtime defaults
 4. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)
 5. Hardcoded fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)

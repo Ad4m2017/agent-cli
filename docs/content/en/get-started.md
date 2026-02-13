@@ -249,8 +249,16 @@ Options:
   --verbose              Additional runtime diagnostics
   --debug                Detailed diagnostics (implies --verbose)
   --stream               Stream assistant text when supported (disabled in --json and tool turns)
+  --command-timeout <ms> Tool command timeout in milliseconds
+  --allow-insecure-http  Allow non-local HTTP provider base URLs
   --help
   --version
+```
+
+If `-m/--message` is omitted, the prompt is read from stdin:
+
+```bash
+cat prompt.txt | node agent.js --approval auto
 ```
 
 ```text
@@ -266,6 +274,8 @@ node agent-connect.js [--provider <name>] [--config <path>] [--auth-config <path
 - `TOOLS_NOT_SUPPORTED`: Use `--tools auto` or `--no-tools`
 - `FETCH_TIMEOUT`: Provider request exceeded timeout
 - `RETRY_EXHAUSTED`: Retries on transient provider failures were exhausted
+- `INSECURE_BASE_URL`: Public HTTP base URL rejected (use HTTPS, local/private host, or `--allow-insecure-http`)
+- `INVALID_BASE_URL`: Provider base URL is malformed or uses an unsupported protocol
 - `COPILOT_DEVICE_CODE_EXPIRED`: Re-run `node agent-connect.js --provider copilot`
 - `ATTACHMENT_TOO_LARGE`: File exceeds 200KB or image exceeds 5MB
 - `AUTH_CONFIG_INVALID`: Delete `agent.auth.json` and re-run `node agent-connect.js`
