@@ -7,7 +7,15 @@
     "defaultApprovalMode": "ask",
     "defaultToolsMode": "auto",
     "commandTimeoutMs": 10000,
-    "allowInsecureHttp": false
+    "approvalTimeoutMs": 0,
+    "allowInsecureHttp": false,
+    "systemPrompt": "",
+    "attachments": {
+      "maxFileBytes": 0,
+      "maxImageBytes": 0,
+      "maxFiles": 0,
+      "maxImages": 0
+    }
   },
   "security": {
     "mode": "build",

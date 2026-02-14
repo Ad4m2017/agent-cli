@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.2.0";
+const AGENT_VERSION = "1.2.1";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -756,6 +756,15 @@ function resolveCommandTimeoutMs(opts, agentConfig) {
   if (rounded < 100) return 100;
   if (rounded > 600000) return 600000;
   return rounded;
+}
+
+function resolveAllowInsecureHttp(opts, agentConfig) {
+  if (opts && opts.allowInsecureHttp) return true;
+  const cfgValue =
+    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.allowInsecureHttp === "boolean"
+      ? agentConfig.runtime.allowInsecureHttp
+      : false;
+  return cfgValue;
 }
 
 function isLocalOrPrivateHttpHost(hostname) {
@@ -1926,6 +1935,8 @@ async function main() {
     e.code = err && err.code ? err.code : ERROR_CODES.AUTH_CONFIG_ERROR;
     throw e;
   }
+
+  opts.allowInsecureHttp = resolveAllowInsecureHttp(opts, agentConfig);
 
   const attachmentLimits = resolveAttachmentLimits(opts, agentConfig);
   const systemPrompt = resolveSystemPrompt(opts, agentConfig);
