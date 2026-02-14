@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.2.1] - 2026-02-14
+
+### Fixed
+- `agent.js` now correctly honors `runtime.allowInsecureHttp` from `agent.json` (while preserving CLI/env override priority).
+
+### Changed
+- Version bumped from `1.2.0` to `1.2.1` in `agent.js`, `agent-connect.js`, and `package.json`.
+- README version labels updated in `README.md` and `README.de.md`.
+
 ## [1.2.0] - 2026-02-14
 
 ### Added
