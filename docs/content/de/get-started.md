@@ -193,8 +193,11 @@ node agent.js -m "Vergleiche diese" --file a.js --file b.js
 
 Limits:
 
-- Dateien: max 10, max 200KB je Datei, muss UTF-8-Text sein
-- Bilder: max 5, max 5MB je Bild, Formate: `.png`, `.jpg`, `.jpeg`, `.webp`
+- Standardmaessig gibt es keine hardcodierten Attachment-Limits.
+- Optionale Limits mit `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images` setzen.
+- Validierung ist strikt: Werte muessen Integer `>= 0` sein; `0` bedeutet unbegrenzt.
+- Dateien muessen weiterhin UTF-8-Text sein.
+- Bildformate: `.png`, `.jpg`, `.jpeg`, `.webp`.
 - Bilder erfordern ein Vision-faehiges Modell (gpt-4o, gpt-4.1, gpt-5, Gemini). Text-only-Modelle geben `VISION_NOT_SUPPORTED` zurueck.
 
 ## Anwendungsbeispiele
@@ -253,6 +256,11 @@ Optionen:
   --no-tools
   --file <pfad>          (wiederholbar)
   --image <pfad>         (wiederholbar)
+  --system-prompt <text> Optionaler System-Prompt (leer deaktiviert die System-Role)
+  --max-file-bytes <n>   Integer >= 0, 0 = unbegrenzt
+  --max-image-bytes <n>  Integer >= 0, 0 = unbegrenzt
+  --max-files <n>        Integer >= 0, 0 = unbegrenzt
+  --max-images <n>       Integer >= 0, 0 = unbegrenzt
   --yes                  Alias fuer --approval auto
   --unsafe               Unsafe-Modus erzwingen
   --log                  Fehler-Logging aktivieren
@@ -288,7 +296,8 @@ node agent-connect.js [--provider <name>] [--config <path>] [--auth-config <path
 - `INSECURE_BASE_URL`: Oeffentliche HTTP-Base-URL abgelehnt (HTTPS, lokalen/privaten Host oder `--allow-insecure-http` nutzen)
 - `INVALID_BASE_URL`: Provider-Base-URL ist ungueltig oder nutzt ein nicht unterstuetztes Protokoll
 - `COPILOT_DEVICE_CODE_EXPIRED`: `node agent-connect.js --provider copilot` erneut ausfuehren
-- `ATTACHMENT_TOO_LARGE`: Datei ueberschreitet 200KB oder Bild ueberschreitet 5MB
+- `ATTACHMENT_LIMIT_INVALID`: Ungueltiger Limit-Wert (muss Integer >= 0 sein)
+- `ATTACHMENT_TOO_LARGE`: Anhang ueberschreitet konfiguriertes Byte-Limit
 - `AUTH_CONFIG_INVALID`: `agent.auth.json` loeschen und `node agent-connect.js` erneut ausfuehren
 
 Exit-Code-Mapping fuer CI/CD:

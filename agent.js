@@ -17,11 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.1.0";
-const MAX_FILE_BYTES = 200 * 1024;
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-const MAX_FILES = 10;
-const MAX_IMAGES = 5;
+const AGENT_VERSION = "1.2.0";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -45,6 +41,7 @@ const ERROR_CODES = {
   ATTACHMENT_TOO_MANY_FILES: "ATTACHMENT_TOO_MANY_FILES",
   ATTACHMENT_TOO_MANY_IMAGES: "ATTACHMENT_TOO_MANY_IMAGES",
   ATTACHMENT_TOO_LARGE: "ATTACHMENT_TOO_LARGE",
+  ATTACHMENT_LIMIT_INVALID: "ATTACHMENT_LIMIT_INVALID",
   ATTACHMENT_TYPE_UNSUPPORTED: "ATTACHMENT_TYPE_UNSUPPORTED",
   PROVIDER_NOT_CONFIGURED: "PROVIDER_NOT_CONFIGURED",
   VISION_NOT_SUPPORTED: "VISION_NOT_SUPPORTED",
@@ -216,6 +213,12 @@ function parseCliArgs(argv) {
     stream: false,
     allowInsecureHttp: false,
     commandTimeoutMs: null,
+    systemPrompt: "",
+    systemPromptSet: false,
+    maxFileBytes: null,
+    maxImageBytes: null,
+    maxFiles: null,
+    maxImages: null,
     mode: "",
     approval: "",
     tools: "",
@@ -303,6 +306,37 @@ function parseCliArgs(argv) {
       continue;
     }
 
+    if (a === "--system-prompt") {
+      opts.systemPrompt = argv[i + 1] || "";
+      opts.systemPromptSet = true;
+      i += 1;
+      continue;
+    }
+
+    if (a === "--max-file-bytes") {
+      opts.maxFileBytes = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+
+    if (a === "--max-image-bytes") {
+      opts.maxImageBytes = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+
+    if (a === "--max-files") {
+      opts.maxFiles = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+
+    if (a === "--max-images") {
+      opts.maxImages = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+
     if (a === "--mode") {
       opts.mode = argv[i + 1] || "";
       i += 1;
@@ -379,6 +413,11 @@ function printHelp() {
     "  --stream               Enable streaming output when supported",
     "  --allow-insecure-http  Allow non-local HTTP provider URLs",
     "  --command-timeout <ms> Tool command timeout in milliseconds",
+    "  --system-prompt <text> Optional system prompt (empty disables system role)",
+    "  --max-file-bytes <n>   Max bytes per --file (integer >= 0, 0 = unlimited)",
+    "  --max-image-bytes <n>  Max bytes per --image (integer >= 0, 0 = unlimited)",
+    "  --max-files <n>        Max number of --file attachments (integer >= 0, 0 = unlimited)",
+    "  --max-images <n>       Max number of --image attachments (integer >= 0, 0 = unlimited)",
     "  --mode <name>          Security mode (plan/build/unsafe)",
     "  --approval <name>      Approval mode (ask/auto/never)",
     "  --tools <name>         Tools mode (auto/on/off)",
@@ -816,15 +855,76 @@ function detectImageMime(filePath) {
   return IMAGE_MIME_BY_EXT[ext] || "";
 }
 
-function collectAttachments(opts) {
-  if (opts.files.length > MAX_FILES) {
-    const e = new Error(`Too many files. Maximum is ${MAX_FILES}.`);
+function parseNonNegativeInt(raw, label) {
+  if (raw == null) return null;
+
+  let value;
+  if (typeof raw === "number") {
+    value = raw;
+    if (!Number.isFinite(value) || !Number.isInteger(value)) {
+      const e = new Error(`Invalid value for ${label}: '${String(raw)}'. Expected integer >= 0.`);
+      e.code = ERROR_CODES.ATTACHMENT_LIMIT_INVALID;
+      throw e;
+    }
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed || !/^\d+$/.test(trimmed)) {
+      const e = new Error(`Invalid value for ${label}: '${raw}'. Expected integer >= 0.`);
+      e.code = ERROR_CODES.ATTACHMENT_LIMIT_INVALID;
+      throw e;
+    }
+    value = Number(trimmed);
+  } else {
+    const e = new Error(`Invalid value for ${label}: '${String(raw)}'. Expected integer >= 0.`);
+    e.code = ERROR_CODES.ATTACHMENT_LIMIT_INVALID;
+    throw e;
+  }
+
+  if (!Number.isSafeInteger(value) || value < 0) {
+    const e = new Error(`Invalid value for ${label}: '${String(raw)}'. Expected integer >= 0.`);
+    e.code = ERROR_CODES.ATTACHMENT_LIMIT_INVALID;
+    throw e;
+  }
+
+  if (value === 0) return null;
+  return value;
+}
+
+function resolveAttachmentLimits(opts, agentConfig) {
+  const runtime = agentConfig && agentConfig.runtime && typeof agentConfig.runtime === "object" ? agentConfig.runtime : {};
+  const cfg = runtime && runtime.attachments && typeof runtime.attachments === "object" ? runtime.attachments : {};
+
+  return {
+    maxFileBytes: parseNonNegativeInt(opts && opts.maxFileBytes != null ? opts.maxFileBytes : cfg.maxFileBytes, "--max-file-bytes"),
+    maxImageBytes: parseNonNegativeInt(opts && opts.maxImageBytes != null ? opts.maxImageBytes : cfg.maxImageBytes, "--max-image-bytes"),
+    maxFiles: parseNonNegativeInt(opts && opts.maxFiles != null ? opts.maxFiles : cfg.maxFiles, "--max-files"),
+    maxImages: parseNonNegativeInt(opts && opts.maxImages != null ? opts.maxImages : cfg.maxImages, "--max-images"),
+  };
+}
+
+function resolveSystemPrompt(opts, agentConfig) {
+  if (opts && opts.systemPromptSet) return typeof opts.systemPrompt === "string" ? opts.systemPrompt : "";
+  if (opts && typeof opts.systemPrompt === "string" && opts.systemPrompt) return opts.systemPrompt;
+
+  const runtime = agentConfig && agentConfig.runtime && typeof agentConfig.runtime === "object" ? agentConfig.runtime : {};
+  if (typeof runtime.systemPrompt === "string") return runtime.systemPrompt;
+  return "";
+}
+
+function collectAttachments(opts, limits) {
+  const maxFiles = limits && Number.isInteger(limits.maxFiles) ? limits.maxFiles : null;
+  const maxImages = limits && Number.isInteger(limits.maxImages) ? limits.maxImages : null;
+  const maxFileBytes = limits && Number.isInteger(limits.maxFileBytes) ? limits.maxFileBytes : null;
+  const maxImageBytes = limits && Number.isInteger(limits.maxImageBytes) ? limits.maxImageBytes : null;
+
+  if (maxFiles != null && opts.files.length > maxFiles) {
+    const e = new Error(`Too many files. Maximum is ${maxFiles}.`);
     e.code = ERROR_CODES.ATTACHMENT_TOO_MANY_FILES;
     throw e;
   }
 
-  if (opts.images.length > MAX_IMAGES) {
-    const e = new Error(`Too many images. Maximum is ${MAX_IMAGES}.`);
+  if (maxImages != null && opts.images.length > maxImages) {
+    const e = new Error(`Too many images. Maximum is ${maxImages}.`);
     e.code = ERROR_CODES.ATTACHMENT_TOO_MANY_IMAGES;
     throw e;
   }
@@ -832,8 +932,8 @@ function collectAttachments(opts) {
   const files = opts.files.map((rawPath) => {
     const abs = toAbsolutePath(rawPath);
     const stat = ensureReadableFile(abs);
-    if (stat.size > MAX_FILE_BYTES) {
-      const e = new Error(`File too large (${stat.size} bytes): ${rawPath}. Max ${MAX_FILE_BYTES} bytes.`);
+    if (maxFileBytes != null && stat.size > maxFileBytes) {
+      const e = new Error(`File too large (${stat.size} bytes): ${rawPath}. Max ${maxFileBytes} bytes.`);
       e.code = ERROR_CODES.ATTACHMENT_TOO_LARGE;
       throw e;
     }
@@ -858,8 +958,8 @@ function collectAttachments(opts) {
   const images = opts.images.map((rawPath) => {
     const abs = toAbsolutePath(rawPath);
     const stat = ensureReadableFile(abs);
-    if (stat.size > MAX_IMAGE_BYTES) {
-      const e = new Error(`Image too large (${stat.size} bytes): ${rawPath}. Max ${MAX_IMAGE_BYTES} bytes.`);
+    if (maxImageBytes != null && stat.size > maxImageBytes) {
+      const e = new Error(`Image too large (${stat.size} bytes): ${rawPath}. Max ${maxImageBytes} bytes.`);
       e.code = ERROR_CODES.ATTACHMENT_TOO_LARGE;
       throw e;
     }
@@ -1728,6 +1828,11 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
  *   AGENT_API_KEY  - API key (overrides agent.auth.json)
  *   AGENT_MODE     - security mode: plan | build | unsafe
  *   AGENT_APPROVAL - approval mode: ask | auto | never
+ *   AGENT_SYSTEM_PROMPT - optional system prompt (empty disables)
+ *   AGENT_MAX_FILE_BYTES - max bytes per --file (integer >= 0, 0 = unlimited)
+ *   AGENT_MAX_IMAGE_BYTES - max bytes per --image (integer >= 0, 0 = unlimited)
+ *   AGENT_MAX_FILES - max count for --file attachments (integer >= 0, 0 = unlimited)
+ *   AGENT_MAX_IMAGES - max count for --image attachments (integer >= 0, 0 = unlimited)
  *   AGENT_COMMAND_TIMEOUT - tool command timeout (ms)
  *   AGENT_ALLOW_INSECURE_HTTP - allow non-local HTTP base URLs (1/true/yes)
  *
@@ -1738,12 +1843,32 @@ function applyEnvOverrides(opts) {
   const envModel = process.env.AGENT_MODEL || "";
   const envMode = process.env.AGENT_MODE || "";
   const envApproval = process.env.AGENT_APPROVAL || "";
+  const envSystemPrompt = Object.prototype.hasOwnProperty.call(process.env, "AGENT_SYSTEM_PROMPT")
+    ? String(process.env.AGENT_SYSTEM_PROMPT)
+    : null;
+  const envMaxFileBytes = Object.prototype.hasOwnProperty.call(process.env, "AGENT_MAX_FILE_BYTES")
+    ? String(process.env.AGENT_MAX_FILE_BYTES)
+    : null;
+  const envMaxImageBytes = Object.prototype.hasOwnProperty.call(process.env, "AGENT_MAX_IMAGE_BYTES")
+    ? String(process.env.AGENT_MAX_IMAGE_BYTES)
+    : null;
+  const envMaxFiles = Object.prototype.hasOwnProperty.call(process.env, "AGENT_MAX_FILES")
+    ? String(process.env.AGENT_MAX_FILES)
+    : null;
+  const envMaxImages = Object.prototype.hasOwnProperty.call(process.env, "AGENT_MAX_IMAGES")
+    ? String(process.env.AGENT_MAX_IMAGES)
+    : null;
   const envCommandTimeout = Number(process.env.AGENT_COMMAND_TIMEOUT || "");
   const envAllowInsecureHttp = (process.env.AGENT_ALLOW_INSECURE_HTTP || "").trim().toLowerCase();
 
   if (!out.model && envModel) out.model = envModel;
   if (!out.mode && envMode) out.mode = envMode;
   if (!out.approval && envApproval) out.approval = envApproval;
+  if (!out.systemPromptSet && envSystemPrompt !== null) out.systemPrompt = envSystemPrompt;
+  if (out.maxFileBytes == null && envMaxFileBytes !== null) out.maxFileBytes = envMaxFileBytes;
+  if (out.maxImageBytes == null && envMaxImageBytes !== null) out.maxImageBytes = envMaxImageBytes;
+  if (out.maxFiles == null && envMaxFiles !== null) out.maxFiles = envMaxFiles;
+  if (out.maxImages == null && envMaxImages !== null) out.maxImages = envMaxImages;
   if ((out.commandTimeoutMs == null || out.commandTimeoutMs === "") && Number.isFinite(envCommandTimeout)) {
     out.commandTimeoutMs = envCommandTimeout;
   }
@@ -1802,6 +1927,9 @@ async function main() {
     throw e;
   }
 
+  const attachmentLimits = resolveAttachmentLimits(opts, agentConfig);
+  const systemPrompt = resolveSystemPrompt(opts, agentConfig);
+
   const selection = resolveModelSelection(opts, agentConfig, providerConfig);
   logger.verbose(`Model selection: provider='${selection.provider || ""}' model='${selection.model || ""}'`);
   if (!selection.provider) {
@@ -1813,7 +1941,7 @@ async function main() {
   }
   const approvalMode = getEffectiveApprovalMode(opts, agentConfig);
   const toolsMode = getEffectiveToolsMode(opts, agentConfig);
-  const attachments = collectAttachments(opts);
+  const attachments = collectAttachments(opts, attachmentLimits);
 
   if (attachments.images.length > 0 && !modelLikelySupportsVision(selection)) {
     const e = new Error(
@@ -1859,14 +1987,11 @@ async function main() {
     },
   ];
 
-  const messages = [
-    {
-      role: "system",
-      content:
-        "You are a fast CLI assistant. Use tools only when needed. Keep responses concise.",
-    },
-    { role: "user", content: buildUserMessageContent(opts.message, attachments) },
-  ];
+  const messages = [];
+  if (systemPrompt && systemPrompt.trim()) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: buildUserMessageContent(opts.message, attachments) });
 
   const toolCalls = [];
   let finalText = "";
@@ -2086,6 +2211,9 @@ module.exports = {
   buildUserMessageContent,
   extractAssistantText,
   detectImageMime,
+  parseNonNegativeInt,
+  resolveAttachmentLimits,
+  resolveSystemPrompt,
   parseDateMs,
   formatIsoFromSeconds,
   isTokenStillValid,

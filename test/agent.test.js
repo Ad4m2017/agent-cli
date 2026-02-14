@@ -46,6 +46,9 @@ const {
   buildUserMessageContent,
   extractAssistantText,
   detectImageMime,
+  parseNonNegativeInt,
+  resolveAttachmentLimits,
+  resolveSystemPrompt,
   parseDateMs,
   formatIsoFromSeconds,
   isTokenStillValid,
@@ -71,6 +74,7 @@ describe("ERROR_CODES", () => {
       "ATTACHMENT_TOO_MANY_FILES",
       "ATTACHMENT_TOO_MANY_IMAGES",
       "ATTACHMENT_TOO_LARGE",
+      "ATTACHMENT_LIMIT_INVALID",
       "ATTACHMENT_TYPE_UNSUPPORTED",
       "PROVIDER_NOT_CONFIGURED",
       "VISION_NOT_SUPPORTED",
@@ -111,6 +115,12 @@ describe("parseCliArgs", () => {
     assert.equal(opts.stream, false);
     assert.equal(opts.allowInsecureHttp, false);
     assert.equal(opts.commandTimeoutMs, null);
+    assert.equal(opts.systemPrompt, "");
+    assert.equal(opts.systemPromptSet, false);
+    assert.equal(opts.maxFileBytes, null);
+    assert.equal(opts.maxImageBytes, null);
+    assert.equal(opts.maxFiles, null);
+    assert.equal(opts.maxImages, null);
     assert.equal(opts.mode, "");
     assert.equal(opts.approval, "");
     assert.equal(opts.tools, "");
@@ -157,6 +167,29 @@ describe("parseCliArgs", () => {
     const opts = parseCliArgs(["--allow-insecure-http", "--command-timeout", "15000"]);
     assert.equal(opts.allowInsecureHttp, true);
     assert.equal(opts.commandTimeoutMs, 15000);
+  });
+
+  it("parses --system-prompt", () => {
+    const opts = parseCliArgs(["--system-prompt", "be neutral"]);
+    assert.equal(opts.systemPrompt, "be neutral");
+    assert.equal(opts.systemPromptSet, true);
+  });
+
+  it("parses attachment limit flags", () => {
+    const opts = parseCliArgs([
+      "--max-file-bytes",
+      "123",
+      "--max-image-bytes",
+      "456",
+      "--max-files",
+      "7",
+      "--max-images",
+      "8",
+    ]);
+    assert.equal(opts.maxFileBytes, "123");
+    assert.equal(opts.maxImageBytes, "456");
+    assert.equal(opts.maxFiles, "7");
+    assert.equal(opts.maxImages, "8");
   });
 
   it("parses --log-file", () => {
@@ -1363,6 +1396,60 @@ describe("fetchWithRetry", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Attachment limit parsing
+// ---------------------------------------------------------------------------
+describe("parseNonNegativeInt", () => {
+  it("returns null for nullish values", () => {
+    assert.equal(parseNonNegativeInt(null, "max-files"), null);
+    assert.equal(parseNonNegativeInt(undefined, "max-files"), null);
+  });
+
+  it("parses numeric strings and numbers", () => {
+    assert.equal(parseNonNegativeInt("12", "max-files"), 12);
+    assert.equal(parseNonNegativeInt(4, "max-files"), 4);
+  });
+
+  it("treats 0 as unlimited (null)", () => {
+    assert.equal(parseNonNegativeInt("0", "max-files"), null);
+    assert.equal(parseNonNegativeInt(0, "max-files"), null);
+  });
+
+  it("throws clear error for invalid values", () => {
+    assert.throws(() => parseNonNegativeInt("abc", "max-files"), /Expected integer >= 0/);
+    assert.throws(() => parseNonNegativeInt("-1", "max-files"), /Expected integer >= 0/);
+    assert.throws(() => parseNonNegativeInt(-1, "max-files"), /Expected integer >= 0/);
+  });
+});
+
+describe("resolveAttachmentLimits", () => {
+  it("prefers CLI/env opts over config", () => {
+    const opts = { maxFiles: "3", maxImages: "2", maxFileBytes: "100", maxImageBytes: "200" };
+    const cfg = { runtime: { attachments: { maxFiles: 9, maxImages: 9, maxFileBytes: 999, maxImageBytes: 999 } } };
+    const out = resolveAttachmentLimits(opts, cfg);
+    assert.deepEqual(out, { maxFiles: 3, maxImages: 2, maxFileBytes: 100, maxImageBytes: 200 });
+  });
+
+  it("uses config values when opts are unset", () => {
+    const out = resolveAttachmentLimits({}, { runtime: { attachments: { maxFiles: 4, maxImages: 5 } } });
+    assert.equal(out.maxFiles, 4);
+    assert.equal(out.maxImages, 5);
+    assert.equal(out.maxFileBytes, null);
+  });
+});
+
+describe("resolveSystemPrompt", () => {
+  it("returns CLI system prompt when explicitly set", () => {
+    assert.equal(resolveSystemPrompt({ systemPromptSet: true, systemPrompt: "x" }, null), "x");
+    assert.equal(resolveSystemPrompt({ systemPromptSet: true, systemPrompt: "" }, null), "");
+  });
+
+  it("uses config systemPrompt when CLI did not set one", () => {
+    const cfg = { runtime: { systemPrompt: "from config" } };
+    assert.equal(resolveSystemPrompt({ systemPromptSet: false, systemPrompt: "" }, cfg), "from config");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // applyEnvOverrides
 // ---------------------------------------------------------------------------
 describe("applyEnvOverrides", () => {
@@ -1473,18 +1560,112 @@ describe("applyEnvOverrides", () => {
     }
   });
 
+  it("applies AGENT_SYSTEM_PROMPT when CLI did not set --system-prompt", () => {
+    const original = process.env.AGENT_SYSTEM_PROMPT;
+    try {
+      process.env.AGENT_SYSTEM_PROMPT = "stay neutral";
+      const result = applyEnvOverrides({ systemPromptSet: false, systemPrompt: "" });
+      assert.equal(result.systemPrompt, "stay neutral");
+    } finally {
+      if (original === undefined) delete process.env.AGENT_SYSTEM_PROMPT;
+      else process.env.AGENT_SYSTEM_PROMPT = original;
+    }
+  });
+
+  it("does not override CLI system prompt when explicitly set", () => {
+    const original = process.env.AGENT_SYSTEM_PROMPT;
+    try {
+      process.env.AGENT_SYSTEM_PROMPT = "env prompt";
+      const result = applyEnvOverrides({ systemPromptSet: true, systemPrompt: "cli prompt" });
+      assert.equal(result.systemPrompt, "cli prompt");
+    } finally {
+      if (original === undefined) delete process.env.AGENT_SYSTEM_PROMPT;
+      else process.env.AGENT_SYSTEM_PROMPT = original;
+    }
+  });
+
+  it("applies attachment limit env vars when CLI values are missing", () => {
+    const originals = {
+      AGENT_MAX_FILE_BYTES: process.env.AGENT_MAX_FILE_BYTES,
+      AGENT_MAX_IMAGE_BYTES: process.env.AGENT_MAX_IMAGE_BYTES,
+      AGENT_MAX_FILES: process.env.AGENT_MAX_FILES,
+      AGENT_MAX_IMAGES: process.env.AGENT_MAX_IMAGES,
+    };
+    try {
+      process.env.AGENT_MAX_FILE_BYTES = "123";
+      process.env.AGENT_MAX_IMAGE_BYTES = "456";
+      process.env.AGENT_MAX_FILES = "7";
+      process.env.AGENT_MAX_IMAGES = "8";
+      const result = applyEnvOverrides({
+        maxFileBytes: null,
+        maxImageBytes: null,
+        maxFiles: null,
+        maxImages: null,
+      });
+      assert.equal(result.maxFileBytes, "123");
+      assert.equal(result.maxImageBytes, "456");
+      assert.equal(result.maxFiles, "7");
+      assert.equal(result.maxImages, "8");
+    } finally {
+      for (const [key, value] of Object.entries(originals)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  it("CLI attachment limits take priority over env", () => {
+    const originals = {
+      AGENT_MAX_FILE_BYTES: process.env.AGENT_MAX_FILE_BYTES,
+      AGENT_MAX_IMAGE_BYTES: process.env.AGENT_MAX_IMAGE_BYTES,
+      AGENT_MAX_FILES: process.env.AGENT_MAX_FILES,
+      AGENT_MAX_IMAGES: process.env.AGENT_MAX_IMAGES,
+    };
+    try {
+      process.env.AGENT_MAX_FILE_BYTES = "999";
+      process.env.AGENT_MAX_IMAGE_BYTES = "999";
+      process.env.AGENT_MAX_FILES = "999";
+      process.env.AGENT_MAX_IMAGES = "999";
+      const result = applyEnvOverrides({
+        maxFileBytes: "1",
+        maxImageBytes: "2",
+        maxFiles: "3",
+        maxImages: "4",
+      });
+      assert.equal(result.maxFileBytes, "1");
+      assert.equal(result.maxImageBytes, "2");
+      assert.equal(result.maxFiles, "3");
+      assert.equal(result.maxImages, "4");
+    } finally {
+      for (const [key, value] of Object.entries(originals)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
   it("returns unchanged opts when no env vars are set", () => {
     const originalModel = process.env.AGENT_MODEL;
     const originalMode = process.env.AGENT_MODE;
     const originalApproval = process.env.AGENT_APPROVAL;
     const originalTimeout = process.env.AGENT_COMMAND_TIMEOUT;
     const originalAllowHttp = process.env.AGENT_ALLOW_INSECURE_HTTP;
+    const originalSystemPrompt = process.env.AGENT_SYSTEM_PROMPT;
+    const originalMaxFileBytes = process.env.AGENT_MAX_FILE_BYTES;
+    const originalMaxImageBytes = process.env.AGENT_MAX_IMAGE_BYTES;
+    const originalMaxFiles = process.env.AGENT_MAX_FILES;
+    const originalMaxImages = process.env.AGENT_MAX_IMAGES;
     try {
       delete process.env.AGENT_MODEL;
       delete process.env.AGENT_MODE;
       delete process.env.AGENT_APPROVAL;
       delete process.env.AGENT_COMMAND_TIMEOUT;
       delete process.env.AGENT_ALLOW_INSECURE_HTTP;
+      delete process.env.AGENT_SYSTEM_PROMPT;
+      delete process.env.AGENT_MAX_FILE_BYTES;
+      delete process.env.AGENT_MAX_IMAGE_BYTES;
+      delete process.env.AGENT_MAX_FILES;
+      delete process.env.AGENT_MAX_IMAGES;
       const result = applyEnvOverrides({ model: "", mode: "", approval: "", message: "test" });
       assert.equal(result.model, "");
       assert.equal(result.mode, "");
@@ -1501,6 +1682,16 @@ describe("applyEnvOverrides", () => {
       else process.env.AGENT_COMMAND_TIMEOUT = originalTimeout;
       if (originalAllowHttp === undefined) delete process.env.AGENT_ALLOW_INSECURE_HTTP;
       else process.env.AGENT_ALLOW_INSECURE_HTTP = originalAllowHttp;
+      if (originalSystemPrompt === undefined) delete process.env.AGENT_SYSTEM_PROMPT;
+      else process.env.AGENT_SYSTEM_PROMPT = originalSystemPrompt;
+      if (originalMaxFileBytes === undefined) delete process.env.AGENT_MAX_FILE_BYTES;
+      else process.env.AGENT_MAX_FILE_BYTES = originalMaxFileBytes;
+      if (originalMaxImageBytes === undefined) delete process.env.AGENT_MAX_IMAGE_BYTES;
+      else process.env.AGENT_MAX_IMAGE_BYTES = originalMaxImageBytes;
+      if (originalMaxFiles === undefined) delete process.env.AGENT_MAX_FILES;
+      else process.env.AGENT_MAX_FILES = originalMaxFiles;
+      if (originalMaxImages === undefined) delete process.env.AGENT_MAX_IMAGES;
+      else process.env.AGENT_MAX_IMAGES = originalMaxImages;
     }
   });
 });

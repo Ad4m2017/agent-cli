@@ -1,4 +1,13 @@
+# Secrets (never commit)
 agent.auth.json
+
+# Optional local-only config overrides
+agent.local.json
+agent.local.*.json
+
+# Runtime logs
 agent.js.log
+
+# Build/release artifacts
 releases/
 *.zip

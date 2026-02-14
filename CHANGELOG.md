@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.2.0] - 2026-02-14
+
+### Added
+- Optional neutral system prompt behavior in `agent.js`:
+  - new `--system-prompt` CLI flag
+  - new `AGENT_SYSTEM_PROMPT` environment override
+  - when unset or empty, no `system` role message is sent
+- Optional attachment limit controls (no hardcoded defaults):
+  - new CLI flags: `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`
+  - new env overrides: `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`
+  - new runtime config keys: `runtime.attachments.maxFileBytes`, `runtime.attachments.maxImageBytes`, `runtime.attachments.maxFiles`, `runtime.attachments.maxImages`
+  - strict validation (`integer >= 0`, `0 = unlimited`) with new error code: `ATTACHMENT_LIMIT_INVALID`
+- New committed baseline config sample: `agent.example.json`
+- Repository hygiene updates:
+  - `.gitignore` now documents secrets/logs and ignores optional local overrides (`agent.local*.json`)
+
+### Changed
+- Attachment handling now defaults to unlimited unless limits are explicitly configured.
+- Help output and EN/DE docs updated for new neutral prompt and attachment limit options.
+- Version bumped from `1.1.0` to `1.2.0` in `agent.js`, `agent-connect.js`, `package.json`, and README version labels.
+
+### Tests
+- Expanded `test/agent.test.js` coverage for:
+  - new CLI argument parsing
+  - env override precedence for system prompt and attachment limits
+  - strict attachment limit validation helpers
+
 ## [1.1.0] - 2026-02-13
 
 ### Added

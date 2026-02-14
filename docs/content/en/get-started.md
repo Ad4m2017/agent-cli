@@ -193,8 +193,11 @@ node agent.js -m "Compare these" --file a.js --file b.js
 
 Limits:
 
-- Files: max 10, max 200KB each, must be UTF-8 text
-- Images: max 5, max 5MB each, formats: `.png`, `.jpg`, `.jpeg`, `.webp`
+- By default, there are no hardcoded attachment limits.
+- Configure optional limits with `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`.
+- Validation is strict: values must be integers `>= 0`; `0` means unlimited.
+- Files must still be UTF-8 text.
+- Images formats: `.png`, `.jpg`, `.jpeg`, `.webp`.
 - Images require a vision-capable model (gpt-4o, gpt-4.1, gpt-5, Gemini). Text-only models return `VISION_NOT_SUPPORTED`.
 
 ## Usage Examples
@@ -253,6 +256,11 @@ Options:
   --no-tools
   --file <path>          (repeatable)
   --image <path>         (repeatable)
+  --system-prompt <text> Optional system prompt (empty disables system role)
+  --max-file-bytes <n>   Integer >= 0, 0 = unlimited
+  --max-image-bytes <n>  Integer >= 0, 0 = unlimited
+  --max-files <n>        Integer >= 0, 0 = unlimited
+  --max-images <n>       Integer >= 0, 0 = unlimited
   --yes                  Alias for --approval auto
   --unsafe               Force unsafe mode
   --log                  Enable error logging
@@ -288,7 +296,8 @@ node agent-connect.js [--provider <name>] [--config <path>] [--auth-config <path
 - `INSECURE_BASE_URL`: Public HTTP base URL rejected (use HTTPS, local/private host, or `--allow-insecure-http`)
 - `INVALID_BASE_URL`: Provider base URL is malformed or uses an unsupported protocol
 - `COPILOT_DEVICE_CODE_EXPIRED`: Re-run `node agent-connect.js --provider copilot`
-- `ATTACHMENT_TOO_LARGE`: File exceeds 200KB or image exceeds 5MB
+- `ATTACHMENT_LIMIT_INVALID`: Invalid limit value (must be integer >= 0)
+- `ATTACHMENT_TOO_LARGE`: Attachment exceeds configured byte limit
 - `AUTH_CONFIG_INVALID`: Delete `agent.auth.json` and re-run `node agent-connect.js`
 
 Exit code mapping for CI/CD:

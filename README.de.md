@@ -78,7 +78,7 @@ node agent-connect.js
 
 Der interaktive Wizard laesst dich einen Provider waehlen, deinen API-Key eingeben und Defaults setzen. Im TTY-Terminal: Pfeiltasten + Enter zur Navigation.
 
-Wizard-Highlights in `v1.1.0`:
+Wizard-Highlights in `v1.2.0`:
 - Provider-Statuslabels (`installed`, `installed, default`, `not configured`)
 - Schnellaktion `Set default provider/model only` (ohne komplettes Re-Setup)
 - Optionales Model-Refresh aus `/models` mit Fallback auf `models.dev`
@@ -180,8 +180,13 @@ Optionen:
   --approval <name>      Freigabemodus: ask, auto, never
   --tools <name>         Tools-Modus: auto, on, off
   --no-tools             Alias fuer --tools off
-  --file <pfad>          Textdatei als Kontext anhaengen (wiederholbar, max 10)
-  --image <pfad>         Bilddatei anhaengen (wiederholbar, max 5)
+  --file <pfad>          Textdatei als Kontext anhaengen (wiederholbar)
+  --image <pfad>         Bilddatei anhaengen (wiederholbar)
+  --system-prompt <text> Optionaler System-Prompt (leer deaktiviert die System-Role)
+  --max-file-bytes <n>   Max Bytes pro --file (Integer >= 0, 0 = unbegrenzt)
+  --max-image-bytes <n>  Max Bytes pro --image (Integer >= 0, 0 = unbegrenzt)
+  --max-files <n>        Max Anzahl --file Anhaenge (Integer >= 0, 0 = unbegrenzt)
+  --max-images <n>       Max Anzahl --image Anhaenge (Integer >= 0, 0 = unbegrenzt)
   --yes                  Alias fuer --approval auto
   --unsafe               Unsafe-Modus erzwingen (denyCritical-Regeln gelten weiterhin)
   --log                  Fehler-Logging in Datei aktivieren
@@ -223,10 +228,20 @@ Optionen:
 |-------|-------|---------|
 | `agent.js` | Haupt-CLI-Runner -- Prompts, Tool-Calls, Ausgabe | Nein |
 | `agent-connect.js` | Provider-Setup-Wizard | Nein |
+| `agent.example.json` | Commitbare Basis fuer Runtime- und Sicherheits-Defaults | Nein |
 | `agent.json` | Runtime-Defaults + Sicherheitsrichtlinie | Nein |
 | `agent.auth.json` | Provider-Credentials und Tokens | **Ja** -- nicht committen |
 | `docs/` | Generierte HTML-Dokumentation | Nein |
 | `scripts/build-docs.js` | Markdown-zu-HTML Docs-Builder | Nein |
+
+## Konfigurationsrichtlinie
+
+- `agent.example.json` als Team-Baseline fuer Runtime- und Sicherheits-Defaults committen.
+- Lokale `agent.json` bei Bedarf maschinenspezifisch halten; sie kann mit `node agent-connect.js` erzeugt werden.
+- `agent.auth.json` nie committen; sie enthaelt Provider-Credentials/Tokens im Klartext.
+- `agent.auth.json` und optionale `agent.local*.json` Dateien in `.gitignore` ignorieren.
+- Fuer neutrales Verhalten `runtime.systemPrompt` weglassen (oder leer lassen).
+- Attachment-Limits sind optional: `runtime.attachments.*` oder CLI-Flags nur setzen, wenn das Projekt harte Limits braucht.
 
 ## Praxisbeispiele
 
@@ -288,7 +303,8 @@ node agent.js -m "Behebe den fehlschlagenden Test" --model openai/gpt-4.1 --appr
 | `INSECURE_BASE_URL` | Oeffentliche `http://` Base-URL blockiert | `https://`, lokalen/privaten Host oder `--allow-insecure-http` nutzen |
 | `INVALID_BASE_URL` | Provider-Base-URL ist ungueltig/nicht unterstuetzt | `baseUrl` in der Config korrigieren |
 | `COPILOT_DEVICE_CODE_EXPIRED` | OAuth-Code abgelaufen | `node agent-connect.js --provider copilot` erneut ausfuehren |
-| `ATTACHMENT_TOO_LARGE` | Datei > 200KB oder Bild > 5MB | Kleinere Datei verwenden oder aufteilen |
+| `ATTACHMENT_LIMIT_INVALID` | Ungueltiger Limit-Wert (z.B. `abc` oder negativ) | Integer `>= 0` verwenden (`0` bedeutet unbegrenzt) |
+| `ATTACHMENT_TOO_LARGE` | Anhang ueberschreitet konfiguriertes Byte-Limit | Limits erhoehen oder kleinere Anhaenge verwenden |
 | `AUTH_CONFIG_INVALID` | `agent.auth.json` beschaedigt | Datei loeschen und `node agent-connect.js` erneut ausfuehren |
 
 Exit-Codes sind fuer Automation vereinheitlicht:
@@ -322,7 +338,7 @@ Das englische README ist verfuegbar unter [README.md](README.md).
 
 ## Version
 
-Aktuelle Version: `1.1.0` -- siehe [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: `1.2.0` -- siehe [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 

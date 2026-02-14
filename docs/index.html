@@ -108,7 +108,7 @@ node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versa
 node agent.js -m &quot;Describe this UI&quot; --model openai/gpt-4o --image screenshot.png
 node agent.js -m &quot;Compare these&quot; --file a.js --file b.js</code></pre>
 <p>Limits:</p>
-<ul><li>Files: max 10, max 200KB each, must be UTF-8 text</li><li>Images: max 5, max 5MB each, formats: <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code></li><li>Images require a vision-capable model (gpt-4o, gpt-4.1, gpt-5, Gemini). Text-only models return <code>VISION_NOT_SUPPORTED</code>.</li></ul>
+<ul><li>By default, there are no hardcoded attachment limits.</li><li>Configure optional limits with <code>--max-file-bytes</code>, <code>--max-image-bytes</code>, <code>--max-files</code>, <code>--max-images</code>.</li><li>Validation is strict: values must be integers <code>&gt;= 0</code>; <code>0</code> means unlimited.</li><li>Files must still be UTF-8 text.</li><li>Images formats: <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.webp</code>.</li><li>Images require a vision-capable model (gpt-4o, gpt-4.1, gpt-5, Gemini). Text-only models return <code>VISION_NOT_SUPPORTED</code>.</li></ul>
 <h2 id="usage-examples">Usage Examples</h2>
 <h3 id="explore-a-codebase">Explore a codebase</h3>
 <pre><code class="language-bash">node agent.js -m &quot;What does this project do? Summarize the architecture.&quot;</code></pre>
@@ -142,6 +142,11 @@ Options:
   --no-tools
   --file &lt;path&gt;          (repeatable)
   --image &lt;path&gt;         (repeatable)
+  --system-prompt &lt;text&gt; Optional system prompt (empty disables system role)
+  --max-file-bytes &lt;n&gt;   Integer &gt;= 0, 0 = unlimited
+  --max-image-bytes &lt;n&gt;  Integer &gt;= 0, 0 = unlimited
+  --max-files &lt;n&gt;        Integer &gt;= 0, 0 = unlimited
+  --max-images &lt;n&gt;       Integer &gt;= 0, 0 = unlimited
   --yes                  Alias for --approval auto
   --unsafe               Force unsafe mode
   --log                  Enable error logging
@@ -157,7 +162,7 @@ Options:
 <pre><code class="language-bash">cat prompt.txt | node agent.js --approval auto</code></pre>
 <pre><code class="language-text">node agent-connect.js [--provider &lt;name&gt;] [--config &lt;path&gt;] [--auth-config &lt;path&gt;] [--help] [--version]</code></pre>
 <h2 id="troubleshooting">Troubleshooting</h2>
-<ul><li><code>PROVIDER_NOT_CONFIGURED</code>: Run <code>node agent-connect.js --provider &lt;name&gt;</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code>: Use <code>--approval auto</code> or <code>--approval never</code> with <code>--json</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code>: Run in an interactive terminal or use <code>--approval auto</code></li><li><code>VISION_NOT_SUPPORTED</code>: Use a vision model (gpt-4o, gpt-4.1) or remove <code>--image</code></li><li><code>TOOLS_NOT_SUPPORTED</code>: Use <code>--tools auto</code> or <code>--no-tools</code></li><li><code>FETCH_TIMEOUT</code>: Provider request exceeded timeout</li><li><code>RETRY_EXHAUSTED</code>: Retries on transient provider failures were exhausted</li><li><code>INSECURE_BASE_URL</code>: Public HTTP base URL rejected (use HTTPS, local/private host, or <code>--allow-insecure-http</code>)</li><li><code>INVALID_BASE_URL</code>: Provider base URL is malformed or uses an unsupported protocol</li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code>: Re-run <code>node agent-connect.js --provider copilot</code></li><li><code>ATTACHMENT_TOO_LARGE</code>: File exceeds 200KB or image exceeds 5MB</li><li><code>AUTH_CONFIG_INVALID</code>: Delete <code>agent.auth.json</code> and re-run <code>node agent-connect.js</code></li></ul>
+<ul><li><code>PROVIDER_NOT_CONFIGURED</code>: Run <code>node agent-connect.js --provider &lt;name&gt;</code></li><li><code>INTERACTIVE_APPROVAL_JSON</code>: Use <code>--approval auto</code> or <code>--approval never</code> with <code>--json</code></li><li><code>INTERACTIVE_APPROVAL_TTY</code>: Run in an interactive terminal or use <code>--approval auto</code></li><li><code>VISION_NOT_SUPPORTED</code>: Use a vision model (gpt-4o, gpt-4.1) or remove <code>--image</code></li><li><code>TOOLS_NOT_SUPPORTED</code>: Use <code>--tools auto</code> or <code>--no-tools</code></li><li><code>FETCH_TIMEOUT</code>: Provider request exceeded timeout</li><li><code>RETRY_EXHAUSTED</code>: Retries on transient provider failures were exhausted</li><li><code>INSECURE_BASE_URL</code>: Public HTTP base URL rejected (use HTTPS, local/private host, or <code>--allow-insecure-http</code>)</li><li><code>INVALID_BASE_URL</code>: Provider base URL is malformed or uses an unsupported protocol</li><li><code>COPILOT_DEVICE_CODE_EXPIRED</code>: Re-run <code>node agent-connect.js --provider copilot</code></li><li><code>ATTACHMENT_LIMIT_INVALID</code>: Invalid limit value (must be integer &gt;= 0)</li><li><code>ATTACHMENT_TOO_LARGE</code>: Attachment exceeds configured byte limit</li><li><code>AUTH_CONFIG_INVALID</code>: Delete <code>agent.auth.json</code> and re-run <code>node agent-connect.js</code></li></ul>
 <p>Exit code mapping for CI/CD:</p>
 <ul><li><code>1</code> generic runtime/connect error</li><li><code>2</code> agent config error (<code>agent.json</code>)</li><li><code>3</code> auth config error (<code>agent.auth.json</code>)</li><li><code>4</code> provider configuration/selection error</li><li><code>5</code> interactive approval constraint error</li><li><code>6</code> provider capability / copilot flow error</li><li><code>7</code> fetch timeout</li><li><code>8</code> retry exhausted</li><li><code>9</code> attachment validation error</li></ul>
         </article>

@@ -6,6 +6,7 @@ Vollstaendige Referenz fuer die Konfigurationsdateien `agent.json` und `agent.au
 
 agent-cli nutzt zwei lokale JSON-Dateien fuer die Konfiguration:
 
+- `agent.example.json` -- empfohlene commitbare Baseline fuer Team-Defaults.
 - `agent.json` -- Nicht-geheime Runtime-Defaults und Sicherheitsrichtlinie. Kann committet werden.
 - `agent.auth.json` -- Provider-Credentials und Tokens. Niemals committen.
 
@@ -80,6 +81,11 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 - `commandTimeoutMs` (`number`) -- Timeout fuer Tool-Command-Ausfuehrung (`run_command`) in Millisekunden. Standard: `10000`.
 - `allowInsecureHttp` (`boolean`) -- Erlaubt nicht-lokale `http://` Provider-Base-URLs wenn true. Standard: `false`.
 - `approvalTimeoutMs` (`number`, optional) -- Timeout in Millisekunden fuer die interaktive Freigabe-Abfrage. 0 oder weggelassen bedeutet kein Timeout.
+- `systemPrompt` (`string`, optional) -- System-Prompt fuer jede Anfrage. Leer oder weggelassen deaktiviert die System-Role-Message.
+- `attachments.maxFileBytes` (`number`, optional) -- Max Bytes pro `--file`-Anhang. Integer `>= 0`; `0` bedeutet unbegrenzt.
+- `attachments.maxImageBytes` (`number`, optional) -- Max Bytes pro `--image`-Anhang. Integer `>= 0`; `0` bedeutet unbegrenzt.
+- `attachments.maxFiles` (`number`, optional) -- Max Anzahl `--file`-Anhaenge. Integer `>= 0`; `0` bedeutet unbegrenzt.
+- `attachments.maxImages` (`number`, optional) -- Max Anzahl `--image`-Anhaenge. Integer `>= 0`; `0` bedeutet unbegrenzt.
 
 ### security
 
@@ -237,9 +243,10 @@ Wenn alle Tokens abgelaufen sind und der Refresh fehlschlaegt: `node agent-conne
 
 - `ATTACHMENT_NOT_FOUND` -- Dateipfad existiert nicht
 - `ATTACHMENT_UNREADABLE` -- Datei nicht als UTF-8-Text lesbar
-- `ATTACHMENT_TOO_LARGE` -- Datei ueberschreitet 200KB oder Bild ueberschreitet 5MB
-- `ATTACHMENT_TOO_MANY_FILES` -- Mehr als 10 Dateien angehaengt
-- `ATTACHMENT_TOO_MANY_IMAGES` -- Mehr als 5 Bilder angehaengt
+- `ATTACHMENT_LIMIT_INVALID` -- Ungueltiger Attachment-Limit-Wert (muss Integer `>= 0` sein)
+- `ATTACHMENT_TOO_LARGE` -- Anhang ueberschreitet konfiguriertes Byte-Limit
+- `ATTACHMENT_TOO_MANY_FILES` -- Anzahl Dateien ueberschreitet konfiguriertes `maxFiles`
+- `ATTACHMENT_TOO_MANY_IMAGES` -- Anzahl Bilder ueberschreitet konfiguriertes `maxImages`
 - `ATTACHMENT_TYPE_UNSUPPORTED` -- Bildformat nicht in: .png, .jpg, .jpeg, .webp
 - `VISION_NOT_SUPPORTED` -- Bild an Text-only-Modell angehaengt
 - `PROVIDER_NOT_CONFIGURED` -- Provider nicht in agent.auth.json gefunden
@@ -291,8 +298,8 @@ agent-cli nutzt jetzt stabile Prozess-Exit-Codes fuer Automation:
 
 Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):
 
-1. CLI-Flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`)
-2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`)
+1. CLI-Flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`)
+2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` Runtime-Defaults
 4. `agent.auth.json` Defaults (`defaultProvider`, `defaultModel`)
 5. Hardcodierte Fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)

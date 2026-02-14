@@ -6,6 +6,7 @@ Complete reference for `agent.json` and `agent.auth.json` configuration files.
 
 agent-cli uses two local JSON files for configuration:
 
+- `agent.example.json` -- recommended committed baseline for team defaults.
 - `agent.json` -- non-secret runtime defaults and security policy. Safe to commit.
 - `agent.auth.json` -- provider credentials and tokens. Never commit this file.
 
@@ -80,6 +81,11 @@ This file controls runtime behavior and security policy. It is created with sens
 - `commandTimeoutMs` (`number`) -- Timeout for tool command execution (`run_command`) in milliseconds. Default: `10000`.
 - `allowInsecureHttp` (`boolean`) -- Allows non-local `http://` provider base URLs when true. Default: `false`.
 - `approvalTimeoutMs` (`number`, optional) -- Timeout in milliseconds for the interactive approval prompt. 0 or omitted means no timeout.
+- `systemPrompt` (`string`, optional) -- System prompt sent with each request. Empty or omitted disables the system role message.
+- `attachments.maxFileBytes` (`number`, optional) -- Max bytes per `--file` attachment. Integer `>= 0`; `0` means unlimited.
+- `attachments.maxImageBytes` (`number`, optional) -- Max bytes per `--image` attachment. Integer `>= 0`; `0` means unlimited.
+- `attachments.maxFiles` (`number`, optional) -- Max number of `--file` attachments. Integer `>= 0`; `0` means unlimited.
+- `attachments.maxImages` (`number`, optional) -- Max number of `--image` attachments. Integer `>= 0`; `0` means unlimited.
 
 ### security
 
@@ -237,9 +243,10 @@ If all tokens are expired and refresh fails, re-run `node agent-connect.js --pro
 
 - `ATTACHMENT_NOT_FOUND` -- File path does not exist
 - `ATTACHMENT_UNREADABLE` -- File is not readable as UTF-8 text
-- `ATTACHMENT_TOO_LARGE` -- File exceeds 200KB or image exceeds 5MB
-- `ATTACHMENT_TOO_MANY_FILES` -- More than 10 files attached
-- `ATTACHMENT_TOO_MANY_IMAGES` -- More than 5 images attached
+- `ATTACHMENT_LIMIT_INVALID` -- Invalid attachment limit value (must be integer `>= 0`)
+- `ATTACHMENT_TOO_LARGE` -- Attachment exceeds configured byte limit
+- `ATTACHMENT_TOO_MANY_FILES` -- Number of files exceeds configured `maxFiles`
+- `ATTACHMENT_TOO_MANY_IMAGES` -- Number of images exceeds configured `maxImages`
 - `ATTACHMENT_TYPE_UNSUPPORTED` -- Image format not in: .png, .jpg, .jpeg, .webp
 - `VISION_NOT_SUPPORTED` -- Image attached to a text-only model
 - `PROVIDER_NOT_CONFIGURED` -- Provider not found in agent.auth.json
@@ -291,8 +298,8 @@ agent-cli now uses stable process exit codes for automation:
 
 Configuration values are resolved in this order (first wins):
 
-1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`)
-2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`)
+1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`)
+2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` runtime defaults
 4. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)
 5. Hardcoded fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
