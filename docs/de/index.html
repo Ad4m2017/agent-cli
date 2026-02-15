@@ -161,7 +161,7 @@ Optionen:
   --allow-insecure-http  Nicht-lokale HTTP Provider-Base-URLs erlauben
   --help
   --version</code></pre>
-<p>Usage-Stats sind optional ueber <code>runtime.usageStats.enabled=true</code> in <code>agent.json</code>. Die <code>--stats</code> Text-Ausgabe zeigt Gesamtwerte plus Aufschluesselungen nach Provider/Model mit Rohwerten und kompakter Form (z.B. <code>12345 (12.3k)</code>).</p>
+<p>Usage-Stats sind optional ueber <code>runtime.usageStats.enabled=true</code> in <code>agent.json</code>. Die <code>--stats</code> Text-Ausgabe zeigt Gesamtwerte, einen Quality-Bereich (<code>Retry Rate</code>, <code>Tool Failure Rate</code>) plus Aufschluesselungen nach Provider/Model mit Rohwerten und kompakter Form (z.B. <code>12345 (12.3k)</code>).</p>
 <p>Wenn <code>-m/--message</code> fehlt, wird der Prompt aus stdin gelesen:</p>
 <pre><code class="language-bash">cat prompt.txt | node agent.js --approval auto</code></pre>
 <pre><code class="language-text">node agent-connect.js [--provider &lt;name&gt;] [--config &lt;path&gt;] [--auth-config &lt;path&gt;] [--help] [--version]</code></pre>

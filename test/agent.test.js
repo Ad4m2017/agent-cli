@@ -1686,7 +1686,7 @@ describe("compactUsageStatsEntries", () => {
 });
 
 describe("buildUsageStatsReport", () => {
-  it("aggregates totals and usage-missing counts", () => {
+  it("aggregates totals, quality metrics, and usage-missing counts", () => {
     const report = buildUsageStatsReport([
       {
         provider: "openai",
@@ -1706,6 +1706,16 @@ describe("buildUsageStatsReport", () => {
         total_tokens: 0,
         has_usage: false,
       },
+      {
+        event_type: "run_summary",
+        provider: "openai",
+        model: "openai/gpt-5-mini",
+        request_count: 0,
+        retries_used: 2,
+        tool_calls_total: 3,
+        tool_calls_failed: 1,
+        tools_fallback_used: true,
+      },
     ]);
 
     assert.equal(report.requests_total, 2);
@@ -1714,6 +1724,13 @@ describe("buildUsageStatsReport", () => {
     assert.equal(report.total_tokens, 15);
     assert.equal(report.by_provider.openai.requests_total, 2);
     assert.equal(report.by_model["openai/gpt-5-mini"].requests_with_usage, 1);
+    assert.equal(report.runs_total, 1);
+    assert.equal(report.retries_used_total, 2);
+    assert.equal(report.tool_calls_total, 3);
+    assert.equal(report.tool_calls_failed, 1);
+    assert.equal(report.tools_fallback_runs, 1);
+    assert.equal(report.retry_rate, 1);
+    assert.equal(report.tool_call_failure_rate, 1 / 3);
   });
 });
 
@@ -1738,7 +1755,7 @@ describe("selectTopModels", () => {
 });
 
 describe("formatUsageStatsText", () => {
-  it("renders pretty box output with provider/model sections", () => {
+  it("renders pretty box output with provider/model and quality sections", () => {
     const report = buildUsageStatsReport([
       {
         provider: "openai",
@@ -1749,11 +1766,22 @@ describe("formatUsageStatsText", () => {
         total_tokens: 19134,
         has_usage: true,
       },
+      {
+        event_type: "run_summary",
+        provider: "openai",
+        model: "openai/gpt-5-mini",
+        request_count: 0,
+        retries_used: 1,
+        tool_calls_total: 2,
+        tool_calls_failed: 1,
+        tools_fallback_used: false,
+      },
     ]);
 
     const out = formatUsageStatsText(report, { filePath: "/tmp/.agent-usage.ndjson" });
     assert.match(out, /┌/);
     assert.match(out, /OVERVIEW/);
+    assert.match(out, /QUALITY/);
     assert.match(out, /MODEL USAGE/);
     assert.match(out, /PROVIDER USAGE/);
     assert.match(out, /Input\s+12\.3K \(12,345\)/);
@@ -1761,6 +1789,8 @@ describe("formatUsageStatsText", () => {
     assert.match(out, /Total\s+19\.1K \(19,134\)/);
     assert.match(out, /openai\/gpt-5-mini/);
     assert.match(out, /Messages\s+1/);
+    assert.match(out, /Retry Rate\s+100%/);
+    assert.match(out, /Tool Failure Rate\s+50%/);
   });
 });
 

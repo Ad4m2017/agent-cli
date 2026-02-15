@@ -89,7 +89,7 @@ This file controls runtime behavior and security policy. It is created with sens
 - `usageStats.file` (`string`, optional) -- Path to the usage log file. Default: `.agent-usage.ndjson`.
 - `usageStats.retentionDays` (`number`, optional) -- Keep stats entries for this many days. Default: `90`.
 - `usageStats.maxBytes` (`number`, optional) -- Soft max file size; applied during `--stats` compaction. Default: `5242880` (5 MB).
-- `--stats` text output includes totals plus `By Provider`/`By Model` sections and shows raw + compact values (for example `12345 (12.3k)`).
+- `--stats` text output includes totals, a quality section (`Retry Rate`, `Tool Failure Rate`), plus `By Provider`/`By Model` sections with raw + compact values (for example `12345 (12.3k)`).
 
 ### security
 

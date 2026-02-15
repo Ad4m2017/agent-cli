@@ -1217,15 +1217,31 @@ function buildUsageStatsReport(entries) {
     input_tokens: 0,
     output_tokens: 0,
     total_tokens: 0,
+    runs_total: 0,
+    retries_used_total: 0,
+    tools_fallback_runs: 0,
+    tool_calls_total: 0,
+    tool_calls_failed: 0,
     by_provider: {},
     by_model: {},
   };
 
   for (const e of entries) {
-    const req = Number.isFinite(Number(e.request_count)) && Number(e.request_count) > 0 ? Math.round(Number(e.request_count)) : 1;
+    const reqNum = Number(e.request_count);
+    const req = Number.isFinite(reqNum) && reqNum >= 0 ? Math.round(reqNum) : 1;
     const provider = typeof e.provider === "string" && e.provider ? e.provider : "unknown";
     const model = typeof e.model === "string" && e.model ? e.model : "unknown";
     const hasUsage = !!e.has_usage;
+    const eventType = typeof e.event_type === "string" ? e.event_type : "request";
+
+    if (eventType === "run_summary") {
+      report.runs_total += 1;
+      report.retries_used_total += toUsageTokenValue(e.retries_used) || 0;
+      report.tool_calls_total += toUsageTokenValue(e.tool_calls_total) || 0;
+      report.tool_calls_failed += toUsageTokenValue(e.tool_calls_failed) || 0;
+      if (e.tools_fallback_used) report.tools_fallback_runs += 1;
+      continue;
+    }
 
     report.requests_total += req;
     if (hasUsage) {
@@ -1273,6 +1289,8 @@ function buildUsageStatsReport(entries) {
   }
 
   report.requests_usage_missing = report.requests_total - report.requests_with_usage;
+  report.retry_rate = report.requests_total > 0 ? report.retries_used_total / report.requests_total : 0;
+  report.tool_call_failure_rate = report.tool_calls_total > 0 ? report.tool_calls_failed / report.tool_calls_total : 0;
   return report;
 }
 
@@ -1339,6 +1357,12 @@ function formatNumberWithCommas(value) {
 function formatOverviewMetric(value) {
   const n = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
   return `${formatHumanNumber(n)} (${formatNumberWithCommas(n)})`;
+}
+
+function formatPercent(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0%";
+  return `${(n * 100).toFixed(1).replace(/\.0$/, "")}%`;
 }
 
 function fitCell(text, width) {
@@ -1410,6 +1434,22 @@ function formatUsageStatsText(report, statsConfig) {
         { label: "With Usage", value: formatNumberWithCommas(report.requests_with_usage) },
         { label: "Missing Usage", value: formatNumberWithCommas(report.requests_usage_missing) },
         { label: "Models Shown", value: `${modelsShown}/${modelsTotal}` },
+      ],
+      width
+    )
+  );
+
+  sections.push(
+    buildStatsBox(
+      "Quality",
+      [
+        { label: "Runs", value: formatNumberWithCommas(report.runs_total) },
+        { label: "Retries Used", value: formatNumberWithCommas(report.retries_used_total) },
+        { label: "Retry Rate", value: formatPercent(report.retry_rate) },
+        { label: "Tool Calls", value: formatNumberWithCommas(report.tool_calls_total) },
+        { label: "Tool Failures", value: formatNumberWithCommas(report.tool_calls_failed) },
+        { label: "Tool Failure Rate", value: formatPercent(report.tool_call_failure_rate) },
+        { label: "Tools Fallback Runs", value: formatNumberWithCommas(report.tools_fallback_runs) },
       ],
       width
     )
@@ -3421,6 +3461,18 @@ async function main() {
     toolCalls,
     timingMs: Date.now() - start,
   };
+
+  appendUsageStatsEvent(usageStatsConfig, {
+    ts: new Date().toISOString(),
+    event_type: "run_summary",
+    provider: runtime.provider,
+    model: `${runtime.provider}/${runtime.model}`,
+    request_count: 0,
+    retries_used: payload.health.retriesUsed,
+    tool_calls_total: payload.health.toolCallsTotal,
+    tool_calls_failed: payload.health.toolCallsFailed,
+    tools_fallback_used: payload.toolsFallbackUsed,
+  });
 
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);

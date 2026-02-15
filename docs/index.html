@@ -161,7 +161,7 @@ Options:
   --allow-insecure-http  Allow non-local HTTP provider base URLs
   --help
   --version</code></pre>
-<p>Usage stats are opt-in via <code>runtime.usageStats.enabled=true</code> in <code>agent.json</code>. <code>--stats</code> text output includes total counts plus By Provider/By Model breakdowns with raw and compact numbers (for example <code>12345 (12.3k)</code>).</p>
+<p>Usage stats are opt-in via <code>runtime.usageStats.enabled=true</code> in <code>agent.json</code>. <code>--stats</code> text output includes total counts, a quality section (<code>Retry Rate</code>, <code>Tool Failure Rate</code>), plus By Provider/By Model breakdowns with raw and compact numbers (for example <code>12345 (12.3k)</code>).</p>
 <p>If <code>-m/--message</code> is omitted, the prompt is read from stdin:</p>
 <pre><code class="language-bash">cat prompt.txt | node agent.js --approval auto</code></pre>
 <pre><code class="language-text">node agent-connect.js [--provider &lt;name&gt;] [--config &lt;path&gt;] [--auth-config &lt;path&gt;] [--help] [--version]</code></pre>

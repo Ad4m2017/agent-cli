@@ -277,7 +277,7 @@ Options:
 ```
 
 Usage stats are opt-in via `runtime.usageStats.enabled=true` in `agent.json`.
-`--stats` text output includes total counts plus By Provider/By Model breakdowns with raw and compact numbers (for example `12345 (12.3k)`).
+`--stats` text output includes total counts, a quality section (`Retry Rate`, `Tool Failure Rate`), plus By Provider/By Model breakdowns with raw and compact numbers (for example `12345 (12.3k)`).
 
 If `-m/--message` is omitted, the prompt is read from stdin:
 

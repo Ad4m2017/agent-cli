@@ -247,7 +247,7 @@ Options:
 - For neutral behavior, leave `runtime.systemPrompt` unset (or empty string).
 - Attachment limits are opt-in: set `runtime.attachments.*` or CLI flags only when your project needs hard caps.
 - Usage stats logging is opt-in: set `runtime.usageStats.enabled=true` to record request/token metadata in `.agent-usage.ndjson`.
-- `--stats` text output shows request/token totals and breakdowns by provider/model with raw + compact values (e.g. `12345 (12.3k)`).
+- `--stats` text output shows request/token totals, a quality section (retry rate + tool failure rate), and provider/model breakdowns with raw + compact values (e.g. `12345 (12.3k)`).
 
 ## Real-World Examples
 

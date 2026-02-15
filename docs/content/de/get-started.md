@@ -277,7 +277,7 @@ Optionen:
 ```
 
 Usage-Stats sind optional ueber `runtime.usageStats.enabled=true` in `agent.json`.
-Die `--stats` Text-Ausgabe zeigt Gesamtwerte plus Aufschluesselungen nach Provider/Model mit Rohwerten und kompakter Form (z.B. `12345 (12.3k)`).
+Die `--stats` Text-Ausgabe zeigt Gesamtwerte, einen Quality-Bereich (`Retry Rate`, `Tool Failure Rate`) plus Aufschluesselungen nach Provider/Model mit Rohwerten und kompakter Form (z.B. `12345 (12.3k)`).
 
 Wenn `-m/--message` fehlt, wird der Prompt aus stdin gelesen:
 

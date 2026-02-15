@@ -247,7 +247,7 @@ Optionen:
 - Fuer neutrales Verhalten `runtime.systemPrompt` weglassen (oder leer lassen).
 - Attachment-Limits sind optional: `runtime.attachments.*` oder CLI-Flags nur setzen, wenn das Projekt harte Limits braucht.
 - Usage-Stats-Logging ist optional: `runtime.usageStats.enabled=true` setzt Logging von Request/Token-Metadaten in `.agent-usage.ndjson` an.
-- `--stats` Text-Ausgabe zeigt Gesamtwerte und Aufschluesselung nach Provider/Model mit Rohwert + kompakter Form (z.B. `12345 (12.3k)`).
+- `--stats` Text-Ausgabe zeigt Gesamtwerte, einen Quality-Bereich (Retry-Rate + Tool-Fehlerquote) und Aufschluesselung nach Provider/Model mit Rohwert + kompakter Form (z.B. `12345 (12.3k)`).
 
 ## Praxisbeispiele
 
