@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.7] - 2026-02-15
+
+### Added
+- Added explicit tool-level error codes for specialized tools: `TOOL_INVALID_ARGS`, `TOOL_NOT_FOUND`, `TOOL_INVALID_PATTERN`, `TOOL_UNSUPPORTED_FILE_TYPE`, `TOOL_CONFLICT`, `TOOL_UNKNOWN`, `TOOL_EXECUTION_ERROR`.
+
+### Changed
+- Standardized specialized tool failure responses to include a stable `code` field.
+- Tool call normalization now guarantees a fallback error code (`TOOL_EXECUTION_ERROR`) when a failing tool does not provide one.
+- Updated unit tests to validate tool error-code behavior.
+- Bumped versions from `1.3.6` to `1.3.7` in `agent.js`, `agent-connect.js`, and `package.json`.
+- Updated README version labels in `README.md` and `README.de.md`.
+
 ## [1.3.6] - 2026-02-15
 
 ### Added

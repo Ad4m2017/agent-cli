@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.6";
+const AGENT_VERSION = "1.3.7";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -51,6 +51,13 @@ const ERROR_CODES = {
   RUNTIME_ERROR: "RUNTIME_ERROR",
   FETCH_TIMEOUT: "FETCH_TIMEOUT",
   RETRY_EXHAUSTED: "RETRY_EXHAUSTED",
+  TOOL_INVALID_ARGS: "TOOL_INVALID_ARGS",
+  TOOL_NOT_FOUND: "TOOL_NOT_FOUND",
+  TOOL_INVALID_PATTERN: "TOOL_INVALID_PATTERN",
+  TOOL_UNSUPPORTED_FILE_TYPE: "TOOL_UNSUPPORTED_FILE_TYPE",
+  TOOL_CONFLICT: "TOOL_CONFLICT",
+  TOOL_UNKNOWN: "TOOL_UNKNOWN",
+  TOOL_EXECUTION_ERROR: "TOOL_EXECUTION_ERROR",
 };
 
 const DEFAULT_FETCH_TIMEOUT_MS = 30000;
@@ -1445,7 +1452,7 @@ function isTextFilePath(filePath) {
 function readUtf8TextFile(filePath) {
   if (!isTextFilePath(filePath)) {
     const e = new Error(`Binary-like file extension is unsupported for text operations: ${filePath}`);
-    e.code = ERROR_CODES.ATTACHMENT_TYPE_UNSUPPORTED;
+    e.code = ERROR_CODES.TOOL_UNSUPPORTED_FILE_TYPE;
     throw e;
   }
   return fs.readFileSync(filePath, "utf8");
@@ -1502,19 +1509,20 @@ function listFilesRecursive(baseDir, includeHidden) {
 
 function readFileTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
-  if (!rawPath) return { ok: false, error: "Missing path" };
+  if (!rawPath) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing path" };
 
   let filePath = "";
   try {
     filePath = resolveToolPath(rawPath, "path");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   let text = "";
   try {
     text = readUtf8TextFile(filePath);
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    const code = err && typeof err.code === "string" && err.code ? err.code : ERROR_CODES.TOOL_EXECUTION_ERROR;
+    return { ok: false, code, error: err && err.message ? err.message : String(err) };
   }
 
   const lines = text.split("\n");
@@ -1546,7 +1554,7 @@ function listFilesTool(args) {
   try {
     root = resolveToolPath(rootRaw, "path");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   const include = args && typeof args.include === "string" && args.include.trim() ? args.include.trim() : "*";
   const includeHidden = !!(args && args.includeHidden);
@@ -1558,9 +1566,9 @@ function listFilesTool(args) {
   try {
     stat = fs.statSync(root);
   } catch {
-    return { ok: false, error: `Path not found: ${rootRaw}` };
+    return { ok: false, code: ERROR_CODES.TOOL_NOT_FOUND, error: `Path not found: ${rootRaw}` };
   }
-  if (!stat.isDirectory()) return { ok: false, error: `Path is not a directory: ${rootRaw}` };
+  if (!stat.isDirectory()) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Path is not a directory: ${rootRaw}` };
 
   const files = listFilesRecursive(root, includeHidden)
     .map((abs) => ({ abs, rel: path.relative(root, abs) }))
@@ -1577,10 +1585,10 @@ function searchContentTool(args) {
   try {
     root = resolveToolPath(rootRaw, "path");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   const pattern = args && typeof args.pattern === "string" ? args.pattern : "";
-  if (!pattern) return { ok: false, error: "Missing pattern" };
+  if (!pattern) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing pattern" };
 
   const include = args && typeof args.include === "string" && args.include.trim() ? args.include.trim() : "*";
   const includeHidden = !!(args && args.includeHidden);
@@ -1593,16 +1601,16 @@ function searchContentTool(args) {
   try {
     contentRx = new RegExp(pattern, caseSensitive ? "g" : "gi");
   } catch (err) {
-    return { ok: false, error: `Invalid regex pattern: ${err.message}` };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_PATTERN, error: `Invalid regex pattern: ${err.message}` };
   }
 
   let stat;
   try {
     stat = fs.statSync(root);
   } catch {
-    return { ok: false, error: `Path not found: ${rootRaw}` };
+    return { ok: false, code: ERROR_CODES.TOOL_NOT_FOUND, error: `Path not found: ${rootRaw}` };
   }
-  if (!stat.isDirectory()) return { ok: false, error: `Path is not a directory: ${rootRaw}` };
+  if (!stat.isDirectory()) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Path is not a directory: ${rootRaw}` };
 
   const matches = [];
   const files = listFilesRecursive(root, includeHidden);
@@ -1641,56 +1649,60 @@ function searchContentTool(args) {
 
 function writeFileTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
-  if (!rawPath) return { ok: false, error: "Missing path" };
+  if (!rawPath) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing path" };
   let filePath = "";
   try {
     filePath = resolveToolPath(rawPath, "path");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   const content = args && typeof args.content === "string" ? args.content : "";
   const createDirs = args && Object.prototype.hasOwnProperty.call(args, "createDirs") ? !!args.createDirs : true;
 
   try {
     if (!createDirs && !fs.existsSync(path.dirname(filePath))) {
-      return { ok: false, error: `Parent directory does not exist: ${path.dirname(rawPath)}` };
+      return { ok: false, code: ERROR_CODES.TOOL_NOT_FOUND, error: `Parent directory does not exist: ${path.dirname(rawPath)}` };
     }
     writeTextAtomic(filePath, content);
     return { ok: true, path: rawPath, bytes: Buffer.byteLength(content, "utf8") };
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_EXECUTION_ERROR, error: err && err.message ? err.message : String(err) };
   }
 }
 
 function deleteFileTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
-  if (!rawPath) return { ok: false, error: "Missing path" };
+  if (!rawPath) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing path" };
   let target = "";
   try {
     target = resolveToolPath(rawPath, "path");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   const recursive = !!(args && args.recursive);
 
   try {
     const st = fs.statSync(target);
     if (st.isDirectory()) {
-      if (!recursive) return { ok: false, error: "Path is a directory. Use recursive=true." };
+      if (!recursive) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Path is a directory. Use recursive=true." };
       fs.rmSync(target, { recursive: true, force: false });
     } else {
       fs.unlinkSync(target);
     }
     return { ok: true, path: rawPath };
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return {
+      ok: false,
+      code: err && err.code === "ENOENT" ? ERROR_CODES.TOOL_NOT_FOUND : ERROR_CODES.TOOL_EXECUTION_ERROR,
+      error: err && err.message ? err.message : String(err),
+    };
   }
 }
 
 function moveFileTool(args) {
   const fromRaw = args && typeof args.path === "string" ? args.path : "";
   const toRaw = args && typeof args.to === "string" ? args.to : "";
-  if (!fromRaw || !toRaw) return { ok: false, error: "Missing path or to" };
+  if (!fromRaw || !toRaw) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing path or to" };
 
   let from = "";
   let to = "";
@@ -1698,30 +1710,34 @@ function moveFileTool(args) {
     from = resolveToolPath(fromRaw, "path");
     to = resolveToolPath(toRaw, "to");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   const overwrite = !!(args && args.overwrite);
 
   try {
     if (!overwrite && fs.existsSync(to)) {
-      return { ok: false, error: `Destination already exists: ${toRaw}` };
+      return { ok: false, code: ERROR_CODES.TOOL_CONFLICT, error: `Destination already exists: ${toRaw}` };
     }
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.renameSync(from, to);
     return { ok: true, path: fromRaw, to: toRaw };
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return {
+      ok: false,
+      code: err && err.code === "ENOENT" ? ERROR_CODES.TOOL_NOT_FOUND : ERROR_CODES.TOOL_EXECUTION_ERROR,
+      error: err && err.message ? err.message : String(err),
+    };
   }
 }
 
 function mkdirTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
-  if (!rawPath) return { ok: false, error: "Missing path" };
+  if (!rawPath) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing path" };
   let target = "";
   try {
     target = resolveToolPath(rawPath, "path");
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: err && err.message ? err.message : String(err) };
   }
   const recursive = args && Object.prototype.hasOwnProperty.call(args, "recursive") ? !!args.recursive : true;
 
@@ -1729,43 +1745,43 @@ function mkdirTool(args) {
     fs.mkdirSync(target, { recursive });
     return { ok: true, path: rawPath, recursive };
   } catch (err) {
-    return { ok: false, error: err && err.message ? err.message : String(err) };
+    return { ok: false, code: ERROR_CODES.TOOL_EXECUTION_ERROR, error: err && err.message ? err.message : String(err) };
   }
 }
 
 function applyPatchTool(args) {
   const ops = args && Array.isArray(args.operations) ? args.operations : [];
-  if (ops.length === 0) return { ok: false, error: "Missing operations[]" };
+  if (ops.length === 0) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Missing operations[]" };
 
   const normalizedOps = [];
   for (const op of ops) {
     const type = op && typeof op.op === "string" ? op.op.trim().toLowerCase() : "";
-    if (!type) return { ok: false, error: "Patch op is missing 'op'" };
+    if (!type) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Patch op is missing 'op'" };
 
     if (type === "write" || type === "add" || type === "update") {
       if (!op || typeof op.path !== "string" || !op.path.trim()) {
-        return { ok: false, error: `Patch op '${type}' is missing 'path'` };
+        return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Patch op '${type}' is missing 'path'` };
       }
       if (!op || typeof op.content !== "string") {
-        return { ok: false, error: `Patch op '${type}' requires string 'content'` };
+        return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Patch op '${type}' requires string 'content'` };
       }
     } else if (type === "delete") {
       if (!op || typeof op.path !== "string" || !op.path.trim()) {
-        return { ok: false, error: "Patch op 'delete' is missing 'path'" };
+        return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Patch op 'delete' is missing 'path'" };
       }
     } else if (type === "move" || type === "rename") {
       if (!op || typeof op.path !== "string" || !op.path.trim()) {
-        return { ok: false, error: `Patch op '${type}' is missing 'path'` };
+        return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Patch op '${type}' is missing 'path'` };
       }
       if (!op || typeof op.to !== "string" || !op.to.trim()) {
-        return { ok: false, error: `Patch op '${type}' is missing 'to'` };
+        return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Patch op '${type}' is missing 'to'` };
       }
     } else if (type === "mkdir") {
       if (!op || typeof op.path !== "string" || !op.path.trim()) {
-        return { ok: false, error: "Patch op 'mkdir' is missing 'path'" };
+        return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "Patch op 'mkdir' is missing 'path'" };
       }
     } else {
-      return { ok: false, error: `Unknown patch op: ${type}` };
+      return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Unknown patch op: ${type}` };
     }
 
     normalizedOps.push(Object.assign({}, op, { op: type }));
@@ -1776,13 +1792,13 @@ function applyPatchTool(args) {
     if (type === "add") {
       const target = toAbsolutePath(op.path);
       if (fs.existsSync(target)) {
-        return { ok: false, error: `Patch precheck failed: add target already exists: ${op.path}` };
+        return { ok: false, code: ERROR_CODES.TOOL_CONFLICT, error: `Patch precheck failed: add target already exists: ${op.path}` };
       }
     }
     if (type === "update") {
       const target = toAbsolutePath(op.path);
       if (!fs.existsSync(target)) {
-        return { ok: false, error: `Patch precheck failed: update target not found: ${op.path}` };
+        return { ok: false, code: ERROR_CODES.TOOL_NOT_FOUND, error: `Patch precheck failed: update target not found: ${op.path}` };
       }
     }
   }
@@ -1800,12 +1816,12 @@ function applyPatchTool(args) {
     } else if (type === "mkdir") {
       res = mkdirTool({ path: op.path, recursive: op.recursive });
     } else {
-      res = { ok: false, error: `Unknown patch op: ${type || "(empty)"}` };
+      res = { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Unknown patch op: ${type || "(empty)"}` };
     }
 
     results.push({ op: type, path: op && op.path ? op.path : "", result: res });
     if (!res.ok) {
-      return { ok: false, error: `Patch failed at op '${type}': ${res.error}`, results };
+      return { ok: false, code: res.code || ERROR_CODES.TOOL_EXECUTION_ERROR, error: `Patch failed at op '${type}': ${res.error}`, results };
     }
   }
 
@@ -1825,7 +1841,7 @@ function buildToolCallRecord(toolName, inputArgs, rawResult, durationMs) {
       ? null
       : {
           message: base && base.error ? String(base.error) : "Tool execution failed",
-          code: base && typeof base.code === "string" ? base.code : "",
+          code: base && typeof base.code === "string" && base.code ? base.code : ERROR_CODES.TOOL_EXECUTION_ERROR,
         },
     meta: {
       duration_ms: Number.isFinite(Number(durationMs)) ? Math.max(0, Math.round(Number(durationMs))) : 0,
@@ -3238,7 +3254,7 @@ async function main() {
       } else if (name === "run_command") {
         result = await runCommandTool(args, opts, agentConfig);
       } else {
-        result = { ok: false, error: `Unknown tool: ${name}` };
+        result = { ok: false, code: ERROR_CODES.TOOL_UNKNOWN, error: `Unknown tool: ${name}` };
       }
 
       const record = buildToolCallRecord(name, args, result, Date.now() - toolStart);

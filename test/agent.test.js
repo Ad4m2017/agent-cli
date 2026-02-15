@@ -1764,12 +1764,14 @@ describe("specialized file tools", () => {
         operations: [{ op: "add", path: "p/existing.txt", content: "y\n" }],
       });
       assert.equal(addExisting.ok, false);
+      assert.equal(addExisting.code, ERROR_CODES.TOOL_CONFLICT);
       assert.match(addExisting.error, /add target already exists/);
 
       const updateMissing = applyPatchTool({
         operations: [{ op: "update", path: "p/missing.txt", content: "y\n" }],
       });
       assert.equal(updateMissing.ok, false);
+      assert.equal(updateMissing.code, ERROR_CODES.TOOL_NOT_FOUND);
       assert.match(updateMissing.error, /update target not found/);
     } finally {
       process.chdir(cwdBefore);
@@ -1784,6 +1786,7 @@ describe("specialized file tools", () => {
     try {
       const res = writeFileTool({ path: "missing/dir/file.txt", content: "a", createDirs: false });
       assert.equal(res.ok, false);
+      assert.equal(res.code, ERROR_CODES.TOOL_NOT_FOUND);
       assert.match(res.error, /Parent directory does not exist/);
     } finally {
       process.chdir(cwdBefore);
@@ -1808,6 +1811,17 @@ describe("buildToolCallRecord", () => {
     assert.equal(rec.ok, false);
     assert.equal(rec.result, null);
     assert.equal(rec.error.message, "boom");
+    assert.equal(rec.error.code, ERROR_CODES.TOOL_EXECUTION_ERROR);
+  });
+
+  it("preserves explicit tool error code", () => {
+    const rec = buildToolCallRecord(
+      "write_file",
+      { path: "a.txt" },
+      { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: "bad args" },
+      1
+    );
+    assert.equal(rec.error.code, ERROR_CODES.TOOL_INVALID_ARGS);
   });
 });
 
