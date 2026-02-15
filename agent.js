@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.1";
+const AGENT_VERSION = "1.3.2";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -2322,6 +2322,14 @@ async function main() {
   let streamedFinalOutput = false;
   let toolsEnabled = toolsMode !== "off";
   let toolsFallbackUsed = false;
+  const usageAggregate = {
+    turns: 0,
+    turns_with_usage: 0,
+    has_usage: false,
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+  };
   const maxTurns = 5;
 
   for (let turn = 0; turn < maxTurns; turn += 1) {
@@ -2396,6 +2404,14 @@ async function main() {
     }
 
     const usageStats = extractUsageStatsFromCompletion(completion);
+    usageAggregate.turns += 1;
+    if (usageStats.hasUsage) {
+      usageAggregate.turns_with_usage += 1;
+      usageAggregate.has_usage = true;
+      usageAggregate.input_tokens += usageStats.inputTokens;
+      usageAggregate.output_tokens += usageStats.outputTokens;
+      usageAggregate.total_tokens += usageStats.totalTokens;
+    }
     appendUsageStatsEvent(usageStatsConfig, {
       ts: new Date().toISOString(),
       provider: runtime.provider,
@@ -2466,6 +2482,7 @@ async function main() {
       files: attachments.files.map((f) => ({ path: f.path, size: f.size, type: "text" })),
       images: attachments.images.map((i) => ({ path: i.path, size: i.size, type: i.mime })),
     },
+    usage: usageAggregate,
     message: finalText,
     toolCalls,
     timingMs: Date.now() - start,

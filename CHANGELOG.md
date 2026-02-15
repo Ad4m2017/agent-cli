@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.2] - 2026-02-15
+
+### Added
+- `--json` responses now include a `usage` object for the current run (aggregated across turns): `turns`, `turns_with_usage`, `has_usage`, `input_tokens`, `output_tokens`, `total_tokens`.
+
+### Changed
+- Version bumped from `1.3.1` to `1.3.2` in `agent.js`, `agent-connect.js`, and `package.json`.
+- README version labels updated in `README.md` and `README.de.md`.
+
 ## [1.3.1] - 2026-02-15
 
 ### Added
