@@ -202,6 +202,12 @@ else:
   "toolsMode": "auto",
   "toolsEnabled": true,
   "toolsFallbackUsed": false,
+  "health": {
+    "retriesUsed": 0,
+    "toolCallsTotal": 1,
+    "toolCallsFailed": 0,
+    "toolCallFailureRate": 0
+  },
   "attachments": {
     "files": [],
     "images": []
@@ -268,6 +274,7 @@ Garantiert in erfolgreichen `--json`-Antworten:
 - `toolsMode`
 - `toolsEnabled`
 - `toolsFallbackUsed`
+- `health`
 - `attachments`
 - `usage`
 - `message`
@@ -308,6 +315,7 @@ Hauefige Tool-Fehlercodes in normalisierten Tool-Call-Records:
 - `toolsMode` (`string`) -- Konfigurierter Tools-Modus
 - `toolsEnabled` (`boolean`) -- Ob Tools tatsaechlich an das Modell gesendet wurden
 - `toolsFallbackUsed` (`boolean`) -- Ob Auto-Modus auf ohne-Tools zurueckgefallen ist
+- `health` (`object`) -- Runtime-Health-Zusammenfassung (`retriesUsed`, `toolCallsTotal`, `toolCallsFailed`, `toolCallFailureRate`)
 - `attachments` (`object`) -- Angehaengte Dateien und Bilder
 - `usage` (`object`) -- Aggregierte Usage fuer diesen Lauf (`turns`, `input_tokens`, `output_tokens`, `total_tokens`, ...)
 - `message` (`string`) -- Finale Textantwort der KI

@@ -37,7 +37,7 @@
 <h2 id="top-level-responses">Top-Level Responses</h2>
 <h3 id="success-shape">Success shape</h3>
 <p>Guaranteed keys on success:</p>
-<ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
+<ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>health</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
 <p>Optional keys on success:</p>
 <ul><li>None</li></ul>
 <h3 id="error-shape">Error shape</h3>
@@ -47,6 +47,9 @@
 <p>Each entry in <code>toolCalls</code> is normalized as:</p>
 <ul><li><code>tool</code></li><li><code>input</code></li><li><code>ok</code></li><li><code>result</code></li><li><code>error</code></li><li><code>meta</code></li></ul>
 <p>When <code>ok</code> is <code>false</code>, <code>error.code</code> is always set (fallback: <code>TOOL_EXECUTION_ERROR</code>).</p>
+<h2 id="health-summary">Health Summary</h2>
+<p><code>health</code> is always present on success and contains:</p>
+<ul><li><code>retriesUsed</code> (<code>number</code>) -- Number of fetch retries used for chat completion requests.</li><li><code>toolCallsTotal</code> (<code>number</code>) -- Total number of tool calls executed.</li><li><code>toolCallsFailed</code> (<code>number</code>) -- Number of tool calls with <code>ok: false</code>.</li><li><code>toolCallFailureRate</code> (<code>number</code>) -- <code>toolCallsFailed / toolCallsTotal</code> (0 when no tool calls).</li></ul>
 <h2 id="tool-error-codes">Tool Error Codes</h2>
 <ul><li><code>TOOL_INVALID_ARGS</code></li><li><code>TOOL_NOT_FOUND</code></li><li><code>TOOL_INVALID_PATTERN</code></li><li><code>TOOL_UNSUPPORTED_FILE_TYPE</code></li><li><code>TOOL_CONFLICT</code></li><li><code>TOOL_UNKNOWN</code></li><li><code>TOOL_EXECUTION_ERROR</code></li></ul>
 <h2 id="machine-readable-schema">Machine-Readable Schema</h2>
@@ -60,6 +63,7 @@
 <a class="sub-item" href="#success-shape">Success shape</a>
 <a class="sub-item" href="#error-shape">Error shape</a>
 <a href="#tool-call-records">Tool Call Records</a>
+<a href="#health-summary">Health Summary</a>
 <a href="#tool-error-codes">Tool Error Codes</a>
 <a href="#machine-readable-schema">Machine-Readable Schema</a></nav>
       </aside>

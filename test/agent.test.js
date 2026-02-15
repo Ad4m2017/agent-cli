@@ -307,6 +307,13 @@ describe("buildJsonOutputSchema", () => {
     assert.equal(items.type, "object");
     assert.deepEqual(items.required, ["tool", "input", "ok", "result", "error", "meta"]);
   });
+
+  it("includes health summary schema", () => {
+    const s = buildJsonOutputSchema();
+    const health = s.properties.health;
+    assert.equal(health.type, "object");
+    assert.deepEqual(health.required, ["retriesUsed", "toolCallsTotal", "toolCallsFailed", "toolCallFailureRate"]);
+  });
 });
 
 // ---------------------------------------------------------------------------

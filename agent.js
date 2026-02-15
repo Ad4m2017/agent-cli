@@ -140,6 +140,7 @@ function parseRetryAfter(headerValue, maxDelayMs) {
 async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
   const cfg = Object.assign({}, DEFAULT_RETRY_OPTS, retryOpts || {});
   const logFn = typeof cfg.logFn === "function" ? cfg.logFn : null;
+  const onRetry = typeof cfg.onRetry === "function" ? cfg.onRetry : null;
   let lastError = null;
 
   for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
@@ -155,6 +156,7 @@ async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
         const raHeader = res.headers ? res.headers.get("retry-after") : null;
         const raMs = parseRetryAfter(raHeader, cfg.maxDelayMs);
         const delayMs = raMs != null ? raMs : Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
+        if (onRetry) onRetry({ attempt: attempt + 1, maxRetries: cfg.maxRetries, reason: "http_429", delayMs });
         if (logFn) logFn(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP 429 rate limited)`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
@@ -164,6 +166,7 @@ async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
       if (cfg.retryableStatuses.indexOf(res.status) !== -1) {
         if (attempt >= cfg.maxRetries) return res;
         const delayMs = Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
+        if (onRetry) onRetry({ attempt: attempt + 1, maxRetries: cfg.maxRetries, reason: `http_${res.status}`, delayMs });
         if (logFn) logFn(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (HTTP ${res.status})`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
@@ -178,6 +181,7 @@ async function fetchWithRetry(url, options, timeoutMs, retryOpts) {
       if (err && err.code === ERROR_CODES.FETCH_TIMEOUT) {
         if (attempt >= cfg.maxRetries) break;
         const delayMs = Math.min(cfg.baseDelayMs * Math.pow(2, attempt), cfg.maxDelayMs);
+        if (onRetry) onRetry({ attempt: attempt + 1, maxRetries: cfg.maxRetries, reason: "timeout", delayMs });
         if (logFn) logFn(`Retry ${attempt + 1}/${cfg.maxRetries} after ${delayMs}ms (timeout)`);
         await new Promise((r) => setTimeout(r, delayMs));
         continue;
@@ -485,6 +489,16 @@ function buildJsonOutputSchema() {
       toolsMode: { type: "string" },
       toolsEnabled: { type: "boolean" },
       toolsFallbackUsed: { type: "boolean" },
+      health: {
+        type: "object",
+        properties: {
+          retriesUsed: { type: "number" },
+          toolCallsTotal: { type: "number" },
+          toolCallsFailed: { type: "number" },
+          toolCallFailureRate: { type: "number" },
+        },
+        required: ["retriesUsed", "toolCallsTotal", "toolCallsFailed", "toolCallFailureRate"],
+      },
       attachments: {
         type: "object",
         properties: {
@@ -2301,7 +2315,7 @@ function isStreamUnsupportedError(err) {
   );
 }
 
-async function createChatCompletionStream(runtime, payload, logger, onText) {
+async function createChatCompletionStream(runtime, payload, logger, onText, onRetry) {
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
   const authHeaders = runtime.apiKey ? { Authorization: `Bearer ${runtime.apiKey}` } : {};
   const res = await fetchWithRetry(`${base}/chat/completions`, {
@@ -2316,6 +2330,7 @@ async function createChatCompletionStream(runtime, payload, logger, onText) {
     body: JSON.stringify(Object.assign({}, payload, { stream: true })),
   }, CHAT_FETCH_TIMEOUT_MS, {
     logFn: logger && typeof logger.verbose === "function" ? logger.verbose : null,
+    onRetry,
   });
 
   if (!res.ok) {
@@ -2802,9 +2817,9 @@ async function createProviderRuntime(config, selection, authConfigPath, opts) {
  * Send OpenAI-compatible /chat/completions request via fetch.
  * Uses fetchWithRetry for automatic retry on transient server errors and rate limits.
  */
-async function createChatCompletion(runtime, payload, logger, useStream, onText) {
+async function createChatCompletion(runtime, payload, logger, useStream, onText, onRetry) {
   if (useStream) {
-    return createChatCompletionStream(runtime, payload, logger, onText);
+    return createChatCompletionStream(runtime, payload, logger, onText, onRetry);
   }
   const base = (runtime.baseURL || "https://api.openai.com/v1").replace(/\/$/, "");
   const authHeaders = runtime.apiKey ? { Authorization: `Bearer ${runtime.apiKey}` } : {};
@@ -2820,6 +2835,7 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
     body: JSON.stringify(payload),
   }, CHAT_FETCH_TIMEOUT_MS, {
     logFn: logger && typeof logger.verbose === "function" ? logger.verbose : null,
+    onRetry,
   });
 
   const json = await res.json().catch(() => ({}));
@@ -3205,6 +3221,7 @@ async function main() {
   let streamedFinalOutput = false;
   let toolsEnabled = toolsMode !== "off";
   let toolsFallbackUsed = false;
+  let retriesUsed = 0;
   const usageAggregate = {
     turns: 0,
     turns_with_usage: 0,
@@ -3243,7 +3260,10 @@ async function main() {
           ? (chunk) => {
               process.stdout.write(chunk);
             }
-          : null
+          : null,
+        () => {
+          retriesUsed += 1;
+        }
       );
       if (streamThisTurn) {
         process.stdout.write("\n");
@@ -3253,7 +3273,9 @@ async function main() {
       if (streamThisTurn && isStreamUnsupportedError(err)) {
         logger.verbose("Streaming is unsupported for this provider/model. Falling back to non-stream request.");
         try {
-          completion = await createChatCompletion(runtime, request, logger, false);
+          completion = await createChatCompletion(runtime, request, logger, false, null, () => {
+            retriesUsed += 1;
+          });
         } catch (fallbackErr) {
           completionError = fallbackErr;
         }
@@ -3372,6 +3394,8 @@ async function main() {
     );
   }
 
+  const failedToolCalls = toolCalls.filter((t) => !t.ok).length;
+
   const payload = {
     ok: true,
     provider: runtime.provider,
@@ -3382,6 +3406,12 @@ async function main() {
     toolsMode,
     toolsEnabled,
     toolsFallbackUsed,
+    health: {
+      retriesUsed,
+      toolCallsTotal: toolCalls.length,
+      toolCallsFailed: failedToolCalls,
+      toolCallFailureRate: toolCalls.length ? failedToolCalls / toolCalls.length : 0,
+    },
     attachments: {
       files: attachments.files.map((f) => ({ path: f.path, size: f.size, type: "text" })),
       images: attachments.images.map((i) => ({ path: i.path, size: i.size, type: i.mime })),

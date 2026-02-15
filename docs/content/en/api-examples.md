@@ -202,6 +202,12 @@ else:
   "toolsMode": "auto",
   "toolsEnabled": true,
   "toolsFallbackUsed": false,
+  "health": {
+    "retriesUsed": 0,
+    "toolCallsTotal": 1,
+    "toolCallsFailed": 0,
+    "toolCallFailureRate": 0
+  },
   "attachments": {
     "files": [],
     "images": []
@@ -268,6 +274,7 @@ Guaranteed in successful `--json` responses:
 - `toolsMode`
 - `toolsEnabled`
 - `toolsFallbackUsed`
+- `health`
 - `attachments`
 - `usage`
 - `message`
@@ -308,6 +315,7 @@ Common tool error codes in normalized tool-call records:
 - `toolsMode` (`string`) -- Tools mode that was configured
 - `toolsEnabled` (`boolean`) -- Whether tools were actually sent to the model
 - `toolsFallbackUsed` (`boolean`) -- Whether auto-mode fell back to no-tools
+- `health` (`object`) -- Runtime health summary (`retriesUsed`, `toolCallsTotal`, `toolCallsFailed`, `toolCallFailureRate`)
 - `attachments` (`object`) -- Files and images that were attached
 - `usage` (`object`) -- Aggregated usage for this run (`turns`, `input_tokens`, `output_tokens`, `total_tokens`, ...)
 - `message` (`string`) -- Final text response from the AI

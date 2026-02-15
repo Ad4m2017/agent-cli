@@ -17,6 +17,7 @@ Guaranteed keys on success:
 - `toolsMode`
 - `toolsEnabled`
 - `toolsFallbackUsed`
+- `health`
 - `attachments`
 - `usage`
 - `message`
@@ -47,6 +48,15 @@ Each entry in `toolCalls` is normalized as:
 - `meta`
 
 When `ok` is `false`, `error.code` is always set (fallback: `TOOL_EXECUTION_ERROR`).
+
+## Health Summary
+
+`health` is always present on success and contains:
+
+- `retriesUsed` (`number`) -- Number of fetch retries used for chat completion requests.
+- `toolCallsTotal` (`number`) -- Total number of tool calls executed.
+- `toolCallsFailed` (`number`) -- Number of tool calls with `ok: false`.
+- `toolCallFailureRate` (`number`) -- `toolCallsFailed / toolCallsTotal` (0 when no tool calls).
 
 ## Tool Error Codes
 
