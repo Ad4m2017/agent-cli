@@ -78,7 +78,7 @@ node agent-connect.js
 
 The interactive wizard lets you pick a provider, enter your API key, and set defaults. In TTY terminals, use arrow keys + Enter to navigate menus.
 
-Wizard highlights in `v1.3.2`:
+Wizard highlights in `v1.3.3`:
 - Provider status labels (`installed`, `installed, default`, `not configured`)
 - Quick action `Set default provider/model only` (no full reconfiguration needed)
 - Optional model refresh from live `/models` with fallback to `models.dev`
@@ -188,7 +188,7 @@ Options:
   --max-files <n>        Max number of --file attachments (integer >= 0, 0 = unlimited)
   --max-images <n>       Max number of --image attachments (integer >= 0, 0 = unlimited)
   --yes                  Alias for --approval auto
-  --stats                Show local usage stats from .agent-usage.ndjson (includes By Provider/By Model)
+  --stats [N]            Show usage stats (all models or top N)
   --unsafe               Force unsafe mode (denyCritical rules still apply)
   --log                  Enable error logging to file
   --log-file <path>      Log file path (default: ./agent.js.log)
@@ -341,7 +341,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `1.3.2` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `1.3.3` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

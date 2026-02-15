@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.2";
+const AGENT_VERSION = "1.3.3";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -226,6 +226,7 @@ function parseCliArgs(argv) {
     images: [],
     yes: false,
     stats: false,
+    statsTop: null,
     help: false,
     version: false,
   };
@@ -383,6 +384,14 @@ function parseCliArgs(argv) {
 
     if (a === "--stats") {
       opts.stats = true;
+      const maybeTop = argv[i + 1] || "";
+      if (/^\d+$/.test(maybeTop)) {
+        const n = Number(maybeTop);
+        if (Number.isSafeInteger(n) && n > 0) {
+          opts.statsTop = n;
+        }
+        i += 1;
+      }
       continue;
     }
 
@@ -431,7 +440,7 @@ function printHelp() {
     "  --file <path>          Attach text/code file (repeatable)",
     "  --image <path>         Attach image file (repeatable)",
     "  --yes                  Alias for --approval auto",
-    "  --stats                Show local usage stats from .agent-usage.ndjson",
+    "  --stats [N]            Show usage stats (all models or top N)",
     "  --unsafe               Force unsafe mode (critical deny rules still apply)",
     "  -V, --version          Show version",
     "  -h, --help             Show help",
@@ -1144,6 +1153,33 @@ function buildUsageStatsReport(entries) {
   return report;
 }
 
+function selectTopModels(report, topN) {
+  const base = report && typeof report === "object" ? report : buildUsageStatsReport([]);
+  const allEntries = Object.entries(base.by_model || {}).sort((a, b) => {
+    const bt = toUsageTokenValue(b[1] && b[1].total_tokens) || 0;
+    const at = toUsageTokenValue(a[1] && a[1].total_tokens) || 0;
+    if (bt !== at) return bt - at;
+    const br = toUsageTokenValue(b[1] && b[1].requests_total) || 0;
+    const ar = toUsageTokenValue(a[1] && a[1].requests_total) || 0;
+    if (br !== ar) return br - ar;
+    return String(a[0]).localeCompare(String(b[0]));
+  });
+
+  const limit = Number.isSafeInteger(Number(topN)) && Number(topN) > 0 ? Number(topN) : null;
+  const selected = limit == null ? allEntries : allEntries.slice(0, limit);
+  const byModel = {};
+  for (const [name, value] of selected) {
+    byModel[name] = value;
+  }
+
+  return Object.assign({}, base, {
+    by_model: byModel,
+    models_total_count: allEntries.length,
+    models_shown_count: selected.length,
+    models_top_n: limit,
+  });
+}
+
 function formatHumanNumber(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "0";
@@ -1195,7 +1231,11 @@ function formatUsageStatsText(report, statsConfig) {
     }
   }
 
-  const modelNames = Object.keys(report.by_model).sort();
+  if (Number.isFinite(report.models_total_count) && Number.isFinite(report.models_shown_count)) {
+    lines.push(`- models_shown: ${report.models_shown_count}/${report.models_total_count}`);
+  }
+
+  const modelNames = Object.keys(report.by_model);
   if (modelNames.length > 0) {
     lines.push("", "By Model");
     for (const name of modelNames) {
@@ -2206,7 +2246,7 @@ async function main() {
 
     const usageStatsConfigForStats = resolveUsageStatsConfig(agentConfigForStats);
     const entries = loadAndCompactUsageStats(usageStatsConfigForStats);
-    const report = buildUsageStatsReport(entries);
+    const report = selectTopModels(buildUsageStatsReport(entries), opts.statsTop);
     if (opts.json) {
       process.stdout.write(
         `${JSON.stringify({ ok: true, usageStats: Object.assign({ file: usageStatsConfigForStats.filePath }, report) }, null, 2)}\n`
@@ -2570,6 +2610,7 @@ module.exports = {
   resolveUsageStatsConfig,
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
+  selectTopModels,
   compactUsageStatsEntries,
   loadAndCompactUsageStats,
   formatUsageStatsText,

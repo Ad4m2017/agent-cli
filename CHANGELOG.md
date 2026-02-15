@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.3] - 2026-02-15
+
+### Added
+- `--stats` now supports optional top-N model filtering via positional argument: `--stats N`.
+- `--stats` without a number keeps the default behavior of showing all models.
+
+### Changed
+- Help and docs now show `--stats [N]` usage in CLI examples.
+- Version bumped from `1.3.2` to `1.3.3` in `agent.js`, `agent-connect.js`, and `package.json`.
+- README version labels updated in `README.md` and `README.de.md`.
+
 ## [1.3.2] - 2026-02-15
 
 ### Added

@@ -52,6 +52,7 @@ const {
   resolveUsageStatsConfig,
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
+  selectTopModels,
   compactUsageStatsEntries,
   formatUsageStatsText,
   parseDateMs,
@@ -222,6 +223,19 @@ describe("parseCliArgs", () => {
   it("parses --stats", () => {
     const opts = parseCliArgs(["--stats"]);
     assert.equal(opts.stats, true);
+    assert.equal(opts.statsTop, null);
+  });
+
+  it("parses --stats N as top-N", () => {
+    const opts = parseCliArgs(["--stats", "10"]);
+    assert.equal(opts.stats, true);
+    assert.equal(opts.statsTop, 10);
+  });
+
+  it("ignores invalid --stats N values", () => {
+    const opts = parseCliArgs(["--stats", "abc"]);
+    assert.equal(opts.stats, true);
+    assert.equal(opts.statsTop, null);
   });
 
   it("parses --file and --image (repeatable)", () => {
@@ -1555,6 +1569,26 @@ describe("buildUsageStatsReport", () => {
     assert.equal(report.total_tokens, 15);
     assert.equal(report.by_provider.openai.requests_total, 2);
     assert.equal(report.by_model["openai/gpt-5-mini"].requests_with_usage, 1);
+  });
+});
+
+describe("selectTopModels", () => {
+  it("keeps all models by default and supports top-N filtering", () => {
+    const report = buildUsageStatsReport([
+      { provider: "p", model: "m1", request_count: 1, input_tokens: 1, output_tokens: 1, total_tokens: 2, has_usage: true },
+      { provider: "p", model: "m2", request_count: 1, input_tokens: 1, output_tokens: 1, total_tokens: 20, has_usage: true },
+      { provider: "p", model: "m3", request_count: 1, input_tokens: 1, output_tokens: 1, total_tokens: 10, has_usage: true },
+    ]);
+
+    const all = selectTopModels(report, null);
+    assert.equal(all.models_total_count, 3);
+    assert.equal(all.models_shown_count, 3);
+    assert.deepEqual(Object.keys(all.by_model), ["m2", "m3", "m1"]);
+
+    const top2 = selectTopModels(report, 2);
+    assert.equal(top2.models_total_count, 3);
+    assert.equal(top2.models_shown_count, 2);
+    assert.deepEqual(Object.keys(top2.by_model), ["m2", "m3"]);
   });
 });
 

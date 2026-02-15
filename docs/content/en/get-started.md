@@ -262,7 +262,7 @@ Options:
   --max-files <n>        Integer >= 0, 0 = unlimited
   --max-images <n>       Integer >= 0, 0 = unlimited
   --yes                  Alias for --approval auto
-  --stats                Show local usage stats from .agent-usage.ndjson (By Provider/By Model)
+  --stats [N]            Show usage stats (all models or top N)
   --unsafe               Force unsafe mode
   --log                  Enable error logging
   --log-file <path>      Default: ./agent.js.log
