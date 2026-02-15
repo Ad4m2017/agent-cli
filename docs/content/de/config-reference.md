@@ -37,12 +37,11 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
   "runtime": {
     "defaultProvider": "openai",
     "defaultModel": "openai/gpt-4.1-mini",
-    "defaultMode": "build",
+    "profile": "dev",
     "defaultApprovalMode": "ask",
     "defaultToolsMode": "auto"
   },
   "security": {
-    "mode": "build",
     "denyCritical": [
       "rm -rf /",
       "mkfs",
@@ -54,15 +53,15 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
       "re:wget\\s+.*\\|\\s*(sh|bash)"
     ],
     "modes": {
-      "plan": {
+      "safe": {
         "allow": ["pwd", "ls", "whoami", "date", "git status", "git branch", "git diff", "git log", "node -v", "npm -v"],
         "deny": ["rm", "sudo", "chmod", "chown", "mv", "cp", "docker", "npm install", "git push"]
       },
-      "build": {
+      "dev": {
         "allow": ["pwd", "ls", "whoami", "date", "git", "node", "npm", "pnpm", "yarn", "bun", "python", "pytest", "go", "cargo", "make", "docker"],
         "deny": ["rm", "sudo", "shutdown", "reboot", "mkfs", "chown"]
       },
-      "unsafe": {
+      "framework": {
         "allow": ["*"],
         "deny": ["rm -rf /", "mkfs", "shutdown", "reboot", "poweroff"]
       }
@@ -94,7 +93,6 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 
 ### security
 
-- `mode` (`string`, veraltet) -- Legacy-Feld; wird fuer die Profil-Aufloesung in `agent.js` v1.4.0+ ignoriert.
 - `denyCritical` (`string[]`) -- Befehle die immer blockiert werden, unabhaengig vom Modus. Unterstuetzt Klartext-Matching und Regex via `re:`-Prefix.
 - `modes` (`object`) -- Modusspezifische Allow/Deny-Regelsets.
 
@@ -307,7 +305,7 @@ Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):
 2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_PROFILE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` Runtime-Defaults
 4. `agent.auth.json` Defaults (`defaultProvider`, `defaultModel`)
-5. Hardcodierte Fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
+5. Hardcodierte Fallbacks (`gpt-4.1-mini`, `dev`, `ask`, `auto`)
 
 Aufloesung der Konfigurationspfade:
 

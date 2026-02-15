@@ -197,7 +197,7 @@ else:
   "provider": "copilot",
   "model": "copilot/gpt-4o",
   "profile": "dev",
-  "mode": "build",
+  "mode": "dev",
   "approvalMode": "auto",
   "toolsMode": "auto",
   "toolsEnabled": true,

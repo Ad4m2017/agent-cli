@@ -316,7 +316,7 @@ describe("defaultAgentConfig", () => {
     assert.equal(cfg.version, 1);
     assert.ok(cfg.runtime);
     assert.ok(cfg.security);
-    assert.equal(cfg.runtime.defaultMode, "build");
+    assert.equal(cfg.runtime.profile, "dev");
     assert.equal(cfg.runtime.defaultApprovalMode, "ask");
     assert.equal(cfg.runtime.defaultToolsMode, "auto");
     assert.equal(cfg.runtime.commandTimeoutMs, 10000);
@@ -341,11 +341,11 @@ describe("defaultAgentConfig", () => {
     assert.ok(cfg.security.denyCritical.length > 0);
   });
 
-  it("includes plan, build and unsafe modes", () => {
+  it("includes safe, dev and framework modes", () => {
     const cfg = defaultAgentConfig();
-    assert.ok(cfg.security.modes.plan);
-    assert.ok(cfg.security.modes.build);
-    assert.ok(cfg.security.modes.unsafe);
+    assert.ok(cfg.security.modes.safe);
+    assert.ok(cfg.security.modes.dev);
+    assert.ok(cfg.security.modes.framework);
   });
 });
 
@@ -550,7 +550,7 @@ describe("evaluateCommandPolicy", () => {
 
   it("returns derived mode in result", () => {
     const result = evaluateCommandPolicy("ls", { profile: "dev" }, config);
-    assert.equal(result.mode, "build");
+    assert.equal(result.mode, "dev");
   });
 });
 
@@ -558,23 +558,23 @@ describe("evaluateCommandPolicy", () => {
 // getEffectiveMode
 // ---------------------------------------------------------------------------
 describe("getEffectiveMode", () => {
-  it("returns unsafe when opts.unsafe is true", () => {
-    assert.equal(getEffectiveMode({ unsafe: true, profile: "safe" }, null), "unsafe");
+  it("returns framework when opts.unsafe is true", () => {
+    assert.equal(getEffectiveMode({ unsafe: true, profile: "safe" }, null), "framework");
   });
 
   it("derives mode from opts.profile", () => {
-    assert.equal(getEffectiveMode({ unsafe: false, profile: "safe" }, null), "plan");
-    assert.equal(getEffectiveMode({ unsafe: false, profile: "dev" }, null), "build");
-    assert.equal(getEffectiveMode({ unsafe: false, profile: "framework" }, null), "unsafe");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "safe" }, null), "safe");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "dev" }, null), "dev");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "framework" }, null), "framework");
   });
 
   it("falls back to config runtime.profile", () => {
     const config = { runtime: { profile: "safe" } };
-    assert.equal(getEffectiveMode({ unsafe: false, profile: "" }, config), "plan");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "" }, config), "safe");
   });
 
-  it("falls back to build as final default", () => {
-    assert.equal(getEffectiveMode({ unsafe: false, profile: "" }, null), "build");
+  it("falls back to dev as final default", () => {
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "" }, null), "dev");
   });
 });
 
@@ -599,9 +599,14 @@ describe("getEffectiveProfile", () => {
     assert.equal(getEffectiveProfile({ unsafe: false, profile: "" }, null), "dev");
   });
 
-  it("prefers runtime.profile over deprecated security.profile", () => {
+  it("uses runtime.profile only", () => {
     const cfg = { runtime: { profile: "safe" }, security: { profile: "framework" } };
     assert.equal(getEffectiveProfile({ unsafe: false, profile: "" }, cfg), "safe");
+  });
+
+  it("ignores security.profile when runtime.profile is missing", () => {
+    const cfg = { security: { profile: "framework" } };
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "" }, cfg), "dev");
   });
 });
 

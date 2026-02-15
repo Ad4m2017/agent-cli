@@ -392,13 +392,13 @@ describe("defaultAgentConfig (connect)", () => {
 
   it("has same structure as agent.js defaultAgentConfig", () => {
     const cfg = defaultAgentConfig();
-    assert.equal(cfg.runtime.defaultMode, "build");
+    assert.equal(cfg.runtime.profile, "dev");
     assert.equal(cfg.runtime.defaultApprovalMode, "ask");
     assert.equal(cfg.runtime.defaultToolsMode, "auto");
     assert.ok(Array.isArray(cfg.security.denyCritical));
-    assert.ok(cfg.security.modes.plan);
-    assert.ok(cfg.security.modes.build);
-    assert.ok(cfg.security.modes.unsafe);
+    assert.ok(cfg.security.modes.safe);
+    assert.ok(cfg.security.modes.dev);
+    assert.ok(cfg.security.modes.framework);
   });
 
   it("returns fresh object each call", () => {

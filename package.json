@@ -1,6 +1,6 @@
 {
   "name": "agent-cli",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Zero-dependency AI coding agent for the terminal. Supports GitHub Copilot, OpenAI, Anthropic, Groq, DeepSeek, and more via the OpenAI-compatible API standard.",
   "license": "MIT",
   "keywords": [

@@ -37,12 +37,11 @@ This file controls runtime behavior and security policy. It is created with sens
   "runtime": {
     "defaultProvider": "openai",
     "defaultModel": "openai/gpt-4.1-mini",
-    "defaultMode": "build",
+    "profile": "dev",
     "defaultApprovalMode": "ask",
     "defaultToolsMode": "auto"
   },
   "security": {
-    "mode": "build",
     "denyCritical": [
       "rm -rf /",
       "mkfs",
@@ -54,15 +53,15 @@ This file controls runtime behavior and security policy. It is created with sens
       "re:wget\\s+.*\\|\\s*(sh|bash)"
     ],
     "modes": {
-      "plan": {
+      "safe": {
         "allow": ["pwd", "ls", "whoami", "date", "git status", "git branch", "git diff", "git log", "node -v", "npm -v"],
         "deny": ["rm", "sudo", "chmod", "chown", "mv", "cp", "docker", "npm install", "git push"]
       },
-      "build": {
+      "dev": {
         "allow": ["pwd", "ls", "whoami", "date", "git", "node", "npm", "pnpm", "yarn", "bun", "python", "pytest", "go", "cargo", "make", "docker"],
         "deny": ["rm", "sudo", "shutdown", "reboot", "mkfs", "chown"]
       },
-      "unsafe": {
+      "framework": {
         "allow": ["*"],
         "deny": ["rm -rf /", "mkfs", "shutdown", "reboot", "poweroff"]
       }
@@ -94,7 +93,6 @@ This file controls runtime behavior and security policy. It is created with sens
 
 ### security
 
-- `mode` (`string`, deprecated) -- Legacy field, ignored for profile resolution in `agent.js` v1.4.0+.
 - `denyCritical` (`string[]`) -- Commands that are always blocked, regardless of mode. Supports plain text matching and regex via `re:` prefix.
 - `modes` (`object`) -- Per-mode allow/deny rule sets.
 
@@ -307,7 +305,7 @@ Configuration values are resolved in this order (first wins):
 2. Environment variables (`AGENT_MODEL`, `AGENT_PROFILE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` runtime defaults
 4. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)
-5. Hardcoded fallbacks (`gpt-4.1-mini`, `build`, `ask`, `auto`)
+5. Hardcoded fallbacks (`gpt-4.1-mini`, `dev`, `ask`, `auto`)
 
 Config file path resolution:
 

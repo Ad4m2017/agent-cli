@@ -51,12 +51,11 @@
   &quot;runtime&quot;: {
     &quot;defaultProvider&quot;: &quot;openai&quot;,
     &quot;defaultModel&quot;: &quot;openai/gpt-4.1-mini&quot;,
-    &quot;defaultMode&quot;: &quot;build&quot;,
+    &quot;profile&quot;: &quot;dev&quot;,
     &quot;defaultApprovalMode&quot;: &quot;ask&quot;,
     &quot;defaultToolsMode&quot;: &quot;auto&quot;
   },
   &quot;security&quot;: {
-    &quot;mode&quot;: &quot;build&quot;,
     &quot;denyCritical&quot;: [
       &quot;rm -rf /&quot;,
       &quot;mkfs&quot;,
@@ -68,15 +67,15 @@
       &quot;re:wget\\s+.*\\|\\s*(sh|bash)&quot;
     ],
     &quot;modes&quot;: {
-      &quot;plan&quot;: {
+      &quot;safe&quot;: {
         &quot;allow&quot;: [&quot;pwd&quot;, &quot;ls&quot;, &quot;whoami&quot;, &quot;date&quot;, &quot;git status&quot;, &quot;git branch&quot;, &quot;git diff&quot;, &quot;git log&quot;, &quot;node -v&quot;, &quot;npm -v&quot;],
         &quot;deny&quot;: [&quot;rm&quot;, &quot;sudo&quot;, &quot;chmod&quot;, &quot;chown&quot;, &quot;mv&quot;, &quot;cp&quot;, &quot;docker&quot;, &quot;npm install&quot;, &quot;git push&quot;]
       },
-      &quot;build&quot;: {
+      &quot;dev&quot;: {
         &quot;allow&quot;: [&quot;pwd&quot;, &quot;ls&quot;, &quot;whoami&quot;, &quot;date&quot;, &quot;git&quot;, &quot;node&quot;, &quot;npm&quot;, &quot;pnpm&quot;, &quot;yarn&quot;, &quot;bun&quot;, &quot;python&quot;, &quot;pytest&quot;, &quot;go&quot;, &quot;cargo&quot;, &quot;make&quot;, &quot;docker&quot;],
         &quot;deny&quot;: [&quot;rm&quot;, &quot;sudo&quot;, &quot;shutdown&quot;, &quot;reboot&quot;, &quot;mkfs&quot;, &quot;chown&quot;]
       },
-      &quot;unsafe&quot;: {
+      &quot;framework&quot;: {
         &quot;allow&quot;: [&quot;*&quot;],
         &quot;deny&quot;: [&quot;rm -rf /&quot;, &quot;mkfs&quot;, &quot;shutdown&quot;, &quot;reboot&quot;, &quot;poweroff&quot;]
       }
@@ -86,7 +85,7 @@
 <h3 id="runtime">runtime</h3>
 <ul><li><code>defaultProvider</code> (<code>string</code>) -- Provider-Kennung (z.B. <code>&quot;openai&quot;</code>, <code>&quot;copilot&quot;</code>, <code>&quot;groq&quot;</code>). Wird verwendet wenn <code>--model</code> keinen Provider-Prefix hat.</li><li><code>defaultModel</code> (<code>string</code>) -- Vollstaendige Modell-Kennung im Format <code>provider/model</code> (z.B. <code>&quot;openai/gpt-4.1-mini&quot;</code>). Wird verwendet wenn <code>--model</code> nicht uebergeben wird.</li><li><code>profile</code> (<code>string</code>: <code>&quot;safe&quot;</code>, <code>&quot;dev&quot;</code>, <code>&quot;framework&quot;</code>) -- Runtime-Profil. Standard: <code>&quot;dev&quot;</code>.</li><li><code>defaultApprovalMode</code> (<code>string</code>: <code>&quot;ask&quot;</code>, <code>&quot;auto&quot;</code>, <code>&quot;never&quot;</code>) -- Freigabemodus wenn <code>--approval</code> nicht uebergeben wird. Standard: <code>&quot;ask&quot;</code>.</li><li><code>defaultToolsMode</code> (<code>string</code>: <code>&quot;auto&quot;</code>, <code>&quot;on&quot;</code>, <code>&quot;off&quot;</code>) -- Tools-Modus wenn <code>--tools</code> nicht uebergeben wird. Standard: <code>&quot;auto&quot;</code>.</li><li><code>commandTimeoutMs</code> (<code>number</code>) -- Timeout fuer Tool-Command-Ausfuehrung (<code>run_command</code>) in Millisekunden. Standard: <code>10000</code>.</li><li><code>allowInsecureHttp</code> (<code>boolean</code>) -- Erlaubt nicht-lokale <code>http://</code> Provider-Base-URLs wenn true. Standard: <code>false</code>.</li><li><code>approvalTimeoutMs</code> (<code>number</code>, optional) -- Timeout in Millisekunden fuer die interaktive Freigabe-Abfrage. 0 oder weggelassen bedeutet kein Timeout.</li><li><code>systemPrompt</code> (<code>string</code>, optional) -- System-Prompt fuer jede Anfrage. Leer oder weggelassen deaktiviert die System-Role-Message.</li><li><code>attachments.maxFileBytes</code> (<code>number</code>, optional) -- Max Bytes pro <code>--file</code>-Anhang. Integer <code>&gt;= 0</code>; <code>0</code> bedeutet unbegrenzt.</li><li><code>attachments.maxImageBytes</code> (<code>number</code>, optional) -- Max Bytes pro <code>--image</code>-Anhang. Integer <code>&gt;= 0</code>; <code>0</code> bedeutet unbegrenzt.</li><li><code>attachments.maxFiles</code> (<code>number</code>, optional) -- Max Anzahl <code>--file</code>-Anhaenge. Integer <code>&gt;= 0</code>; <code>0</code> bedeutet unbegrenzt.</li><li><code>attachments.maxImages</code> (<code>number</code>, optional) -- Max Anzahl <code>--image</code>-Anhaenge. Integer <code>&gt;= 0</code>; <code>0</code> bedeutet unbegrenzt.</li><li><code>usageStats.enabled</code> (<code>boolean</code>, optional) -- Aktiviert lokales Usage-Stats-Logging in NDJSON. Standard: <code>false</code>.</li><li><code>usageStats.file</code> (<code>string</code>, optional) -- Pfad zur Usage-Log-Datei. Standard: <code>.agent-usage.ndjson</code>.</li><li><code>usageStats.retentionDays</code> (<code>number</code>, optional) -- Behaelt Stats-Eintraege so viele Tage. Standard: <code>90</code>.</li><li><code>usageStats.maxBytes</code> (<code>number</code>, optional) -- Softes Dateigroessenlimit; wird bei <code>--stats</code>-Kompaktierung angewendet. Standard: <code>5242880</code> (5 MB).</li><li>Die <code>--stats</code> Text-Ausgabe enthaelt Gesamtwerte plus <code>By Provider</code>/<code>By Model</code> und zeigt Rohwert + kompakte Form (z.B. <code>12345 (12.3k)</code>).</li></ul>
 <h3 id="security">security</h3>
-<ul><li><code>mode</code> (<code>string</code>, veraltet) -- Legacy-Feld; wird fuer die Profil-Aufloesung in <code>agent.js</code> v1.4.0+ ignoriert.</li><li><code>denyCritical</code> (<code>string[]</code>) -- Befehle die immer blockiert werden, unabhaengig vom Modus. Unterstuetzt Klartext-Matching und Regex via <code>re:</code>-Prefix.</li><li><code>modes</code> (<code>object</code>) -- Modusspezifische Allow/Deny-Regelsets.</li></ul>
+<ul><li><code>denyCritical</code> (<code>string[]</code>) -- Befehle die immer blockiert werden, unabhaengig vom Modus. Unterstuetzt Klartext-Matching und Regex via <code>re:</code>-Prefix.</li><li><code>modes</code> (<code>object</code>) -- Modusspezifische Allow/Deny-Regelsets.</li></ul>
 <h3 id="securitymodesmode">security.modes.&lt;mode&gt;</h3>
 <ul><li><code>allow</code> (<code>string[]</code>) -- In diesem Modus erlaubte Befehle. <code>&quot;*&quot;</code> fuer alle verwenden.</li><li><code>deny</code> (<code>string[]</code>) -- In diesem Modus blockierte Befehle.</li></ul>
 <h3 id="regel-matching">Regel-Matching</h3>
@@ -185,7 +184,7 @@ node agent.js -m &quot;Hallo&quot; --model openai/gpt-4.1</code></pre>
 <ul><li><code>1</code> generischer Laufzeit-/Connect-Fehler</li><li><code>2</code> agent-config Fehler (<code>agent.json</code>)</li><li><code>3</code> auth-config Fehler (<code>agent.auth.json</code>)</li><li><code>4</code> Provider-Konfigurations-/Auswahlfehler</li><li><code>5</code> interaktiver Approval-Constraint-Fehler</li><li><code>6</code> Provider-Capability-/Copilot-Flow-Fehler</li><li><code>7</code> Fetch-Timeout</li><li><code>8</code> Retry ausgeschopft</li><li><code>9</code> Attachment-Validierungsfehler</li></ul>
 <h2 id="cli-prioritaet">CLI-Prioritaet</h2>
 <p>Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):</p>
-<ol><li>CLI-Flags (<code>--model</code>, <code>--profile</code>, <code>--approval</code>, <code>--tools</code>, <code>--unsafe</code>, <code>--system-prompt</code>, <code>--max-file-bytes</code>, <code>--max-image-bytes</code>, <code>--max-files</code>, <code>--max-images</code>, <code>--stats</code>)</li><li>Umgebungsvariablen (<code>AGENT_MODEL</code>, <code>AGENT_PROFILE</code>, <code>AGENT_APPROVAL</code>, <code>AGENT_API_KEY</code>, <code>AGENT_COMMAND_TIMEOUT</code>, <code>AGENT_ALLOW_INSECURE_HTTP</code>, <code>AGENT_SYSTEM_PROMPT</code>, <code>AGENT_MAX_FILE_BYTES</code>, <code>AGENT_MAX_IMAGE_BYTES</code>, <code>AGENT_MAX_FILES</code>, <code>AGENT_MAX_IMAGES</code>)</li><li><code>agent.json</code> Runtime-Defaults</li><li><code>agent.auth.json</code> Defaults (<code>defaultProvider</code>, <code>defaultModel</code>)</li><li>Hardcodierte Fallbacks (<code>gpt-4.1-mini</code>, <code>build</code>, <code>ask</code>, <code>auto</code>)</li></ol>
+<ol><li>CLI-Flags (<code>--model</code>, <code>--profile</code>, <code>--approval</code>, <code>--tools</code>, <code>--unsafe</code>, <code>--system-prompt</code>, <code>--max-file-bytes</code>, <code>--max-image-bytes</code>, <code>--max-files</code>, <code>--max-images</code>, <code>--stats</code>)</li><li>Umgebungsvariablen (<code>AGENT_MODEL</code>, <code>AGENT_PROFILE</code>, <code>AGENT_APPROVAL</code>, <code>AGENT_API_KEY</code>, <code>AGENT_COMMAND_TIMEOUT</code>, <code>AGENT_ALLOW_INSECURE_HTTP</code>, <code>AGENT_SYSTEM_PROMPT</code>, <code>AGENT_MAX_FILE_BYTES</code>, <code>AGENT_MAX_IMAGE_BYTES</code>, <code>AGENT_MAX_FILES</code>, <code>AGENT_MAX_IMAGES</code>)</li><li><code>agent.json</code> Runtime-Defaults</li><li><code>agent.auth.json</code> Defaults (<code>defaultProvider</code>, <code>defaultModel</code>)</li><li>Hardcodierte Fallbacks (<code>gpt-4.1-mini</code>, <code>dev</code>, <code>ask</code>, <code>auto</code>)</li></ol>
 <p>Aufloesung der Konfigurationspfade:</p>
 <ul><li><code>--config &lt;pfad&gt;</code> ueberschreibt den Standard <code>./agent.json</code></li><li><code>--auth-config &lt;pfad&gt;</code> ueberschreibt den Standard <code>./agent.auth.json</code></li></ul>
 <p>models.dev Integration in <code>agent-connect.js</code>:</p>

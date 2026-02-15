@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "1.4.0";
+const CONNECT_VERSION = "1.5.0";
 
 /**
  * Centralized error codes.
@@ -876,7 +876,7 @@ function defaultAgentConfig() {
     runtime: {
       defaultProvider: "",
       defaultModel: "",
-      defaultMode: "build",
+      profile: "dev",
       defaultApprovalMode: "ask",
       defaultToolsMode: "auto",
       commandTimeoutMs: 10000,
@@ -889,7 +889,6 @@ function defaultAgentConfig() {
       },
     },
     security: {
-      mode: "build",
       denyCritical: [
         "rm -rf /",
         "mkfs",
@@ -901,7 +900,7 @@ function defaultAgentConfig() {
         "re:wget\\s+.*\\|\\s*(sh|bash)",
       ],
       modes: {
-        plan: {
+        safe: {
           allow: [
             "pwd",
             "ls",
@@ -916,7 +915,7 @@ function defaultAgentConfig() {
           ],
           deny: ["rm", "sudo", "chmod", "chown", "mv", "cp", "docker", "npm install", "git push"],
         },
-        build: {
+        dev: {
           allow: [
             "pwd",
             "ls",
@@ -937,7 +936,7 @@ function defaultAgentConfig() {
           ],
           deny: ["rm", "sudo", "shutdown", "reboot", "mkfs", "chown"],
         },
-        unsafe: {
+        framework: {
           allow: ["*"],
           deny: ["rm -rf /", "mkfs", "shutdown", "reboot", "poweroff"],
         },
@@ -1488,18 +1487,18 @@ async function main() {
     }
 
     if (stdin.isTTY && stdout.isTTY) {
-      const modeOptions = [
-        { value: "plan", label: "plan (strict/read-only style)" },
-        { value: "build", label: "build (normal development)" },
-        { value: "unsafe", label: "unsafe (broad command scope)" },
+      const profileOptions = [
+        { value: "safe", label: "safe (conservative command scope)" },
+        { value: "dev", label: "dev (normal development defaults)" },
+        { value: "framework", label: "framework (broad command scope)" },
       ];
-      const defaultModeIndex = Math.max(
+      const currentProfile = agentConfig.runtime.profile || "dev";
+      const defaultProfileIndex = Math.max(
         0,
-        modeOptions.findIndex((m) => m.value === (agentConfig.runtime.defaultMode || "build"))
+        profileOptions.findIndex((p) => p.value === currentProfile)
       );
-      const modeInput = await selectMenu("Select default mode:", modeOptions, defaultModeIndex);
-      agentConfig.runtime.defaultMode = modeInput;
-      agentConfig.security.mode = modeInput;
+      const profileInput = await selectMenu("Select default profile:", profileOptions, defaultProfileIndex);
+      agentConfig.runtime.profile = profileInput;
 
       const approvalOptions = [
         { value: "ask", label: "ask (confirm each command)" },
@@ -1525,12 +1524,12 @@ async function main() {
       const toolsInput = await selectMenu("Select default tools mode:", toolsOptions, defaultToolsIndex);
       agentConfig.runtime.defaultToolsMode = toolsInput;
     } else {
-      const modeInput = (await rl.question(`Default mode [${agentConfig.runtime.defaultMode || "build"}] (plan/build/unsafe): `))
+      const defaultProfile = agentConfig.runtime.profile || "dev";
+      const profileInput = (await rl.question(`Default profile [${defaultProfile}] (safe/dev/framework): `))
         .trim()
         .toLowerCase();
-      if (modeInput === "plan" || modeInput === "build" || modeInput === "unsafe") {
-        agentConfig.runtime.defaultMode = modeInput;
-        agentConfig.security.mode = modeInput;
+      if (profileInput === "safe" || profileInput === "dev" || profileInput === "framework") {
+        agentConfig.runtime.profile = profileInput;
       }
 
       const approvalInput = (

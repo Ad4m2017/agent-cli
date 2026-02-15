@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.4.0";
+const AGENT_VERSION = "1.5.0";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -635,7 +635,6 @@ function defaultAgentConfig() {
       defaultProvider: "",
       defaultModel: "",
       profile: "dev",
-      defaultMode: "build",
       defaultApprovalMode: "ask",
       defaultToolsMode: "auto",
       commandTimeoutMs: 10000,
@@ -648,7 +647,6 @@ function defaultAgentConfig() {
       },
     },
     security: {
-      mode: "build",
       denyCritical: [
         "rm -rf /",
         "mkfs",
@@ -660,7 +658,7 @@ function defaultAgentConfig() {
         "re:wget\\s+.*\\|\\s*(sh|bash)",
       ],
       modes: {
-        plan: {
+        safe: {
           allow: [
             "pwd",
             "ls",
@@ -675,7 +673,7 @@ function defaultAgentConfig() {
           ],
           deny: ["rm", "sudo", "chmod", "chown", "mv", "cp", "docker", "npm install", "git push"],
         },
-        build: {
+        dev: {
           allow: [
             "pwd",
             "ls",
@@ -696,7 +694,7 @@ function defaultAgentConfig() {
           ],
           deny: ["rm", "sudo", "shutdown", "reboot", "mkfs", "chown"],
         },
-        unsafe: {
+        framework: {
           allow: ["*"],
           deny: ["rm -rf /", "mkfs", "shutdown", "reboot", "poweroff"],
         },
@@ -2084,10 +2082,10 @@ function matchesPolicyRule(rule, cmd) {
  */
 function evaluateCommandPolicy(cmd, opts, agentConfig) {
   const profile = getEffectiveProfile(opts, agentConfig);
-  const mode = profileToLegacyMode(profile);
+  const mode = profileToPolicyMode(profile);
   const security = agentConfig && agentConfig.security ? agentConfig.security : defaultAgentConfig().security;
   const modes = security.modes || {};
-  const modeConfig = modes[mode] || modes.build || defaultAgentConfig().security.modes.build;
+  const modeConfig = modes[mode] || modes.dev || defaultAgentConfig().security.modes.dev;
 
   const denyCritical = Array.isArray(security.denyCritical) ? security.denyCritical : [];
   for (const rule of denyCritical) {
@@ -2129,7 +2127,6 @@ function getEffectiveProfileDetails(opts, agentConfig) {
   const profileSources = [
     opts && typeof opts.profile === "string" ? opts.profile : "",
     agentConfig && agentConfig.runtime && typeof agentConfig.runtime.profile === "string" ? agentConfig.runtime.profile : "",
-    agentConfig && agentConfig.security && typeof agentConfig.security.profile === "string" ? agentConfig.security.profile : "",
   ];
 
   for (const source of profileSources) {
@@ -2141,21 +2138,21 @@ function getEffectiveProfileDetails(opts, agentConfig) {
   return { profile: "dev" };
 }
 
-function profileToLegacyMode(profile) {
+function profileToPolicyMode(profile) {
   const p = parseProfileValue(profile);
   const resolved = p ? p.profile : "dev";
-  if (resolved === "safe") return "plan";
-  if (resolved === "framework") return "unsafe";
-  return "build";
+  if (resolved === "safe") return "safe";
+  if (resolved === "framework") return "framework";
+  return "dev";
 }
 
 function getEffectiveProfile(opts, agentConfig) {
   return getEffectiveProfileDetails(opts, agentConfig).profile;
 }
 
-/** Resolve current legacy security mode from profile. */
+/** Resolve policy mode from profile. */
 function getEffectiveMode(opts, agentConfig) {
-  return profileToLegacyMode(getEffectiveProfile(opts, agentConfig));
+  return profileToPolicyMode(getEffectiveProfile(opts, agentConfig));
 }
 
 /** Resolve approval behavior from CLI + config. */

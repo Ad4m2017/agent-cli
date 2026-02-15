@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.0] - 2026-02-15
+
+### Changed
+- Renamed internal security policy buckets from legacy mode keys (`plan`, `build`, `unsafe`) to profile-aligned keys (`safe`, `dev`, `framework`) across runtime defaults, wizard output, and shipped config templates.
+- Updated command policy evaluation to use `security.modes.safe|dev|framework` directly, removing legacy internal mode mapping names.
+- Updated tests and docs to reflect the profile-aligned policy keys and JSON examples (`"mode": "dev"`).
+- Rebuilt generated documentation pages after the terminology migration.
+- Bumped versions to `1.5.0` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.4.0] - 2026-02-15
 
 ### Changed
