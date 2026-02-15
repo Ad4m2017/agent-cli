@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.1] - 2026-02-15
+
+### Added
+- Added strict runtime option validation for `--profile`, `--approval`, and `--tools` with clear `INVALID_OPTION` errors and fix hints.
+- Added `health` to successful `--json` responses with `retriesUsed`, `toolCallsTotal`, `toolCallsFailed`, and `toolCallFailureRate`.
+- Added run-level stats events and a new `QUALITY` section in `--stats` output with retry rate, tool failure rate, and tools-fallback counts.
+
+### Changed
+- Unified profile-first wording across CLI help, blocked-command errors, README, and EN/DE docs.
+- Updated JSON schema and EN/DE JSON contract/API examples for the new `health` object.
+- Updated stats docs to reflect quality metrics in addition to provider/model token breakdowns.
+- Bumped versions to `1.5.1` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.0] - 2026-02-15
 
 ### Changed
