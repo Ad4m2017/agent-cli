@@ -1451,6 +1451,29 @@ function readUtf8TextFile(filePath) {
   return fs.readFileSync(filePath, "utf8");
 }
 
+function resolveToolPath(rawPath, label) {
+  const input = typeof rawPath === "string" ? rawPath.trim() : "";
+  if (!input) {
+    const e = new Error(`Missing ${label || "path"}`);
+    e.code = ERROR_CODES.RUNTIME_ERROR;
+    throw e;
+  }
+  return toAbsolutePath(input);
+}
+
+function writeTextAtomic(filePath, content) {
+  const target = String(filePath || "");
+  const parent = path.dirname(target);
+  const base = path.basename(target);
+  const tmpName = `.${base}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  const tmpPath = path.join(parent, tmpName);
+  const body = typeof content === "string" ? content : String(content || "");
+
+  fs.mkdirSync(parent, { recursive: true });
+  fs.writeFileSync(tmpPath, body, "utf8");
+  fs.renameSync(tmpPath, target);
+}
+
 function listFilesRecursive(baseDir, includeHidden) {
   const out = [];
   const stack = [baseDir];
@@ -1481,7 +1504,12 @@ function readFileTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
   if (!rawPath) return { ok: false, error: "Missing path" };
 
-  const filePath = toAbsolutePath(rawPath);
+  let filePath = "";
+  try {
+    filePath = resolveToolPath(rawPath, "path");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   let text = "";
   try {
     text = readUtf8TextFile(filePath);
@@ -1514,7 +1542,12 @@ function readFileTool(args) {
 
 function listFilesTool(args) {
   const rootRaw = args && typeof args.path === "string" && args.path.trim() ? args.path : ".";
-  const root = toAbsolutePath(rootRaw);
+  let root = "";
+  try {
+    root = resolveToolPath(rootRaw, "path");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   const include = args && typeof args.include === "string" && args.include.trim() ? args.include.trim() : "*";
   const includeHidden = !!(args && args.includeHidden);
   const maxRaw = Number(args && args.maxResults != null ? args.maxResults : 2000);
@@ -1540,7 +1573,12 @@ function listFilesTool(args) {
 
 function searchContentTool(args) {
   const rootRaw = args && typeof args.path === "string" && args.path.trim() ? args.path : ".";
-  const root = toAbsolutePath(rootRaw);
+  let root = "";
+  try {
+    root = resolveToolPath(rootRaw, "path");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   const pattern = args && typeof args.pattern === "string" ? args.pattern : "";
   if (!pattern) return { ok: false, error: "Missing pattern" };
 
@@ -1604,13 +1642,20 @@ function searchContentTool(args) {
 function writeFileTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
   if (!rawPath) return { ok: false, error: "Missing path" };
-  const filePath = toAbsolutePath(rawPath);
+  let filePath = "";
+  try {
+    filePath = resolveToolPath(rawPath, "path");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   const content = args && typeof args.content === "string" ? args.content : "";
   const createDirs = args && Object.prototype.hasOwnProperty.call(args, "createDirs") ? !!args.createDirs : true;
 
   try {
-    if (createDirs) fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, content, "utf8");
+    if (!createDirs && !fs.existsSync(path.dirname(filePath))) {
+      return { ok: false, error: `Parent directory does not exist: ${path.dirname(rawPath)}` };
+    }
+    writeTextAtomic(filePath, content);
     return { ok: true, path: rawPath, bytes: Buffer.byteLength(content, "utf8") };
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
@@ -1620,7 +1665,12 @@ function writeFileTool(args) {
 function deleteFileTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
   if (!rawPath) return { ok: false, error: "Missing path" };
-  const target = toAbsolutePath(rawPath);
+  let target = "";
+  try {
+    target = resolveToolPath(rawPath, "path");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   const recursive = !!(args && args.recursive);
 
   try {
@@ -1642,8 +1692,14 @@ function moveFileTool(args) {
   const toRaw = args && typeof args.to === "string" ? args.to : "";
   if (!fromRaw || !toRaw) return { ok: false, error: "Missing path or to" };
 
-  const from = toAbsolutePath(fromRaw);
-  const to = toAbsolutePath(toRaw);
+  let from = "";
+  let to = "";
+  try {
+    from = resolveToolPath(fromRaw, "path");
+    to = resolveToolPath(toRaw, "to");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   const overwrite = !!(args && args.overwrite);
 
   try {
@@ -1661,7 +1717,12 @@ function moveFileTool(args) {
 function mkdirTool(args) {
   const rawPath = args && typeof args.path === "string" ? args.path : "";
   if (!rawPath) return { ok: false, error: "Missing path" };
-  const target = toAbsolutePath(rawPath);
+  let target = "";
+  try {
+    target = resolveToolPath(rawPath, "path");
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
   const recursive = args && Object.prototype.hasOwnProperty.call(args, "recursive") ? !!args.recursive : true;
 
   try {
@@ -1676,9 +1737,59 @@ function applyPatchTool(args) {
   const ops = args && Array.isArray(args.operations) ? args.operations : [];
   if (ops.length === 0) return { ok: false, error: "Missing operations[]" };
 
-  const results = [];
+  const normalizedOps = [];
   for (const op of ops) {
-    const type = op && typeof op.op === "string" ? op.op : "";
+    const type = op && typeof op.op === "string" ? op.op.trim().toLowerCase() : "";
+    if (!type) return { ok: false, error: "Patch op is missing 'op'" };
+
+    if (type === "write" || type === "add" || type === "update") {
+      if (!op || typeof op.path !== "string" || !op.path.trim()) {
+        return { ok: false, error: `Patch op '${type}' is missing 'path'` };
+      }
+      if (!op || typeof op.content !== "string") {
+        return { ok: false, error: `Patch op '${type}' requires string 'content'` };
+      }
+    } else if (type === "delete") {
+      if (!op || typeof op.path !== "string" || !op.path.trim()) {
+        return { ok: false, error: "Patch op 'delete' is missing 'path'" };
+      }
+    } else if (type === "move" || type === "rename") {
+      if (!op || typeof op.path !== "string" || !op.path.trim()) {
+        return { ok: false, error: `Patch op '${type}' is missing 'path'` };
+      }
+      if (!op || typeof op.to !== "string" || !op.to.trim()) {
+        return { ok: false, error: `Patch op '${type}' is missing 'to'` };
+      }
+    } else if (type === "mkdir") {
+      if (!op || typeof op.path !== "string" || !op.path.trim()) {
+        return { ok: false, error: "Patch op 'mkdir' is missing 'path'" };
+      }
+    } else {
+      return { ok: false, error: `Unknown patch op: ${type}` };
+    }
+
+    normalizedOps.push(Object.assign({}, op, { op: type }));
+  }
+
+  for (const op of normalizedOps) {
+    const type = op.op;
+    if (type === "add") {
+      const target = toAbsolutePath(op.path);
+      if (fs.existsSync(target)) {
+        return { ok: false, error: `Patch precheck failed: add target already exists: ${op.path}` };
+      }
+    }
+    if (type === "update") {
+      const target = toAbsolutePath(op.path);
+      if (!fs.existsSync(target)) {
+        return { ok: false, error: `Patch precheck failed: update target not found: ${op.path}` };
+      }
+    }
+  }
+
+  const results = [];
+  for (const op of normalizedOps) {
+    const type = op.op;
     let res;
     if (type === "write" || type === "add" || type === "update") {
       res = writeFileTool({ path: op.path, content: op.content, createDirs: true });

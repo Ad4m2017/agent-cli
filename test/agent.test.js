@@ -1717,6 +1717,45 @@ describe("specialized file tools", () => {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  it("apply_patch validates add/update semantics", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agent-patch-"));
+    const cwdBefore = process.cwd();
+    process.chdir(tmp);
+    try {
+      fs.mkdirSync("p", { recursive: true });
+      fs.writeFileSync("p/existing.txt", "x\n", "utf8");
+
+      const addExisting = applyPatchTool({
+        operations: [{ op: "add", path: "p/existing.txt", content: "y\n" }],
+      });
+      assert.equal(addExisting.ok, false);
+      assert.match(addExisting.error, /add target already exists/);
+
+      const updateMissing = applyPatchTool({
+        operations: [{ op: "update", path: "p/missing.txt", content: "y\n" }],
+      });
+      assert.equal(updateMissing.ok, false);
+      assert.match(updateMissing.error, /update target not found/);
+    } finally {
+      process.chdir(cwdBefore);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("write_file respects createDirs=false", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agent-write-"));
+    const cwdBefore = process.cwd();
+    process.chdir(tmp);
+    try {
+      const res = writeFileTool({ path: "missing/dir/file.txt", content: "a", createDirs: false });
+      assert.equal(res.ok, false);
+      assert.match(res.error, /Parent directory does not exist/);
+    } finally {
+      process.chdir(cwdBefore);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
