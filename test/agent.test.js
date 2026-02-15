@@ -143,7 +143,6 @@ describe("parseCliArgs", () => {
     assert.equal(opts.maxFiles, null);
     assert.equal(opts.maxImages, null);
     assert.equal(opts.profile, "");
-    assert.equal(opts.mode, "");
     assert.equal(opts.approval, "");
     assert.equal(opts.tools, "");
     assert.deepEqual(opts.files, []);
@@ -219,9 +218,8 @@ describe("parseCliArgs", () => {
     assert.equal(parseCliArgs(["--log-file", "custom.log"]).logFile, "custom.log");
   });
 
-  it("parses --mode, --approval, --tools", () => {
-    const opts = parseCliArgs(["--mode", "plan", "--approval", "auto", "--tools", "on"]);
-    assert.equal(opts.mode, "plan");
+  it("parses --approval and --tools", () => {
+    const opts = parseCliArgs(["--approval", "auto", "--tools", "on"]);
     assert.equal(opts.approval, "auto");
     assert.equal(opts.tools, "on");
   });
@@ -529,29 +527,29 @@ describe("matchesPolicyRule", () => {
 describe("evaluateCommandPolicy", () => {
   const config = defaultAgentConfig();
 
-  it("denies critical commands regardless of mode", () => {
-    const result = evaluateCommandPolicy("rm -rf /", { mode: "unsafe", unsafe: true }, config);
+  it("denies critical commands regardless of profile", () => {
+    const result = evaluateCommandPolicy("rm -rf /", { profile: "framework", unsafe: true }, config);
     assert.equal(result.allowed, false);
     assert.equal(result.source, "denyCritical");
   });
 
-  it("allows whitelisted commands in build mode", () => {
-    const result = evaluateCommandPolicy("git status", { mode: "build" }, config);
+  it("allows whitelisted commands in dev profile", () => {
+    const result = evaluateCommandPolicy("git status", { profile: "dev" }, config);
     assert.equal(result.allowed, true);
   });
 
-  it("denies non-whitelisted commands in plan mode", () => {
-    const result = evaluateCommandPolicy("npm install express", { mode: "plan" }, config);
+  it("denies non-whitelisted commands in safe profile", () => {
+    const result = evaluateCommandPolicy("npm install express", { profile: "safe" }, config);
     assert.equal(result.allowed, false);
   });
 
-  it("allows whitelisted commands in plan mode", () => {
-    const result = evaluateCommandPolicy("ls", { mode: "plan" }, config);
+  it("allows whitelisted commands in safe profile", () => {
+    const result = evaluateCommandPolicy("ls", { profile: "safe" }, config);
     assert.equal(result.allowed, true);
   });
 
-  it("returns mode in result", () => {
-    const result = evaluateCommandPolicy("ls", { mode: "build" }, config);
+  it("returns derived mode in result", () => {
+    const result = evaluateCommandPolicy("ls", { profile: "dev" }, config);
     assert.equal(result.mode, "build");
   });
 });
@@ -561,20 +559,22 @@ describe("evaluateCommandPolicy", () => {
 // ---------------------------------------------------------------------------
 describe("getEffectiveMode", () => {
   it("returns unsafe when opts.unsafe is true", () => {
-    assert.equal(getEffectiveMode({ unsafe: true, mode: "plan" }, null), "unsafe");
+    assert.equal(getEffectiveMode({ unsafe: true, profile: "safe" }, null), "unsafe");
   });
 
-  it("returns opts.mode when specified", () => {
-    assert.equal(getEffectiveMode({ unsafe: false, mode: "plan" }, null), "plan");
+  it("derives mode from opts.profile", () => {
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "safe" }, null), "plan");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "dev" }, null), "build");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "framework" }, null), "unsafe");
   });
 
-  it("falls back to config security mode", () => {
-    const config = { security: { mode: "build" }, runtime: { defaultMode: "plan" } };
-    assert.equal(getEffectiveMode({ unsafe: false, mode: "" }, config), "build");
+  it("falls back to config runtime.profile", () => {
+    const config = { runtime: { profile: "safe" } };
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "" }, config), "plan");
   });
 
   it("falls back to build as final default", () => {
-    assert.equal(getEffectiveMode({ unsafe: false, mode: "" }, null), "build");
+    assert.equal(getEffectiveMode({ unsafe: false, profile: "" }, null), "build");
   });
 });
 
@@ -583,53 +583,41 @@ describe("getEffectiveMode", () => {
 // ---------------------------------------------------------------------------
 describe("getEffectiveProfile", () => {
   it("returns framework when opts.unsafe is true", () => {
-    assert.equal(getEffectiveProfile({ unsafe: true, profile: "safe", mode: "plan" }, null), "framework");
+    assert.equal(getEffectiveProfile({ unsafe: true, profile: "safe" }, null), "framework");
   });
 
   it("uses opts.profile when provided", () => {
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "dev", mode: "plan" }, null), "dev");
-  });
-
-  it("maps legacy opts.mode values", () => {
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "plan" }, null), "safe");
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "build" }, null), "dev");
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "unsafe" }, null), "framework");
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "dev" }, null), "dev");
   });
 
   it("falls back to config runtime.profile", () => {
     const cfg = { runtime: { profile: "framework" } };
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, cfg), "framework");
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "" }, cfg), "framework");
   });
 
   it("defaults to dev", () => {
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, null), "dev");
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "" }, null), "dev");
   });
 
-  it("prefers profile sources over legacy mode", () => {
-    const cfg = { runtime: { profile: "safe", defaultMode: "unsafe" }, security: { mode: "unsafe" } };
-    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, cfg), "safe");
+  it("prefers runtime.profile over deprecated security.profile", () => {
+    const cfg = { runtime: { profile: "safe" }, security: { profile: "framework" } };
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "" }, cfg), "safe");
   });
 });
 
 describe("getEffectiveProfileDetails", () => {
-  it("returns legacy mapping metadata when using legacy mode", () => {
-    const d = getEffectiveProfileDetails({ unsafe: false, profile: "", mode: "plan" }, null);
-    assert.equal(d.profile, "safe");
-    assert.equal(d.legacyModeMappedFrom, "plan");
-  });
-
-  it("does not report legacy mapping when using profile", () => {
-    const d = getEffectiveProfileDetails({ unsafe: false, profile: "framework", mode: "plan" }, null);
+  it("returns profile only", () => {
+    const d = getEffectiveProfileDetails({ unsafe: false, profile: "framework" }, null);
     assert.equal(d.profile, "framework");
-    assert.equal(d.legacyModeMappedFrom, "");
+    assert.equal(Object.prototype.hasOwnProperty.call(d, "legacyModeMappedFrom"), false);
   });
 });
 
 describe("parseProfileValue", () => {
-  it("parses current and legacy values", () => {
-    assert.deepEqual(parseProfileValue("safe"), { profile: "safe", legacy: false, legacyValue: "" });
-    assert.deepEqual(parseProfileValue("build"), { profile: "dev", legacy: true, legacyValue: "build" });
-    assert.deepEqual(parseProfileValue("unsafe"), { profile: "framework", legacy: true, legacyValue: "unsafe" });
+  it("parses profile values", () => {
+    assert.deepEqual(parseProfileValue("safe"), { profile: "safe" });
+    assert.deepEqual(parseProfileValue("dev"), { profile: "dev" });
+    assert.deepEqual(parseProfileValue("framework"), { profile: "framework" });
   });
 
   it("returns null for invalid values", () => {
@@ -1854,12 +1842,11 @@ describe("buildToolCallRecord", () => {
 // ---------------------------------------------------------------------------
 describe("applyEnvOverrides", () => {
   it("does not mutate the original opts object", () => {
-    const original = { model: "", mode: "", approval: "" };
+    const original = { model: "", profile: "", approval: "" };
     const saved = Object.assign({}, original);
     // Ensure env vars are clean
     delete process.env.AGENT_MODEL;
     delete process.env.AGENT_PROFILE;
-    delete process.env.AGENT_MODE;
     delete process.env.AGENT_APPROVAL;
     applyEnvOverrides(original);
     assert.deepStrictEqual(original, saved);
@@ -1886,18 +1873,6 @@ describe("applyEnvOverrides", () => {
     } finally {
       if (originalModel === undefined) delete process.env.AGENT_MODEL;
       else process.env.AGENT_MODEL = originalModel;
-    }
-  });
-
-  it("applies AGENT_MODE when opts.mode is empty", () => {
-    const originalMode = process.env.AGENT_MODE;
-    try {
-      process.env.AGENT_MODE = "plan";
-      const result = applyEnvOverrides({ mode: "" });
-      assert.equal(result.mode, "plan");
-    } finally {
-      if (originalMode === undefined) delete process.env.AGENT_MODE;
-      else process.env.AGENT_MODE = originalMode;
     }
   });
 
@@ -2060,7 +2035,6 @@ describe("applyEnvOverrides", () => {
   it("returns unchanged opts when no env vars are set", () => {
     const originalModel = process.env.AGENT_MODEL;
     const originalProfile = process.env.AGENT_PROFILE;
-    const originalMode = process.env.AGENT_MODE;
     const originalApproval = process.env.AGENT_APPROVAL;
     const originalTimeout = process.env.AGENT_COMMAND_TIMEOUT;
     const originalAllowHttp = process.env.AGENT_ALLOW_INSECURE_HTTP;
@@ -2072,7 +2046,6 @@ describe("applyEnvOverrides", () => {
     try {
       delete process.env.AGENT_MODEL;
       delete process.env.AGENT_PROFILE;
-      delete process.env.AGENT_MODE;
       delete process.env.AGENT_APPROVAL;
       delete process.env.AGENT_COMMAND_TIMEOUT;
       delete process.env.AGENT_ALLOW_INSECURE_HTTP;
@@ -2081,10 +2054,9 @@ describe("applyEnvOverrides", () => {
       delete process.env.AGENT_MAX_IMAGE_BYTES;
       delete process.env.AGENT_MAX_FILES;
       delete process.env.AGENT_MAX_IMAGES;
-      const result = applyEnvOverrides({ model: "", profile: "", mode: "", approval: "", message: "test" });
+      const result = applyEnvOverrides({ model: "", profile: "", approval: "", message: "test" });
       assert.equal(result.model, "");
       assert.equal(result.profile, "");
-      assert.equal(result.mode, "");
       assert.equal(result.approval, "");
       assert.equal(result.message, "test");
     } finally {
@@ -2092,8 +2064,6 @@ describe("applyEnvOverrides", () => {
       else process.env.AGENT_MODEL = originalModel;
       if (originalProfile === undefined) delete process.env.AGENT_PROFILE;
       else process.env.AGENT_PROFILE = originalProfile;
-      if (originalMode === undefined) delete process.env.AGENT_MODE;
-      else process.env.AGENT_MODE = originalMode;
       if (originalApproval === undefined) delete process.env.AGENT_APPROVAL;
       else process.env.AGENT_APPROVAL = originalApproval;
       if (originalTimeout === undefined) delete process.env.AGENT_COMMAND_TIMEOUT;

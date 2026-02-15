@@ -276,7 +276,6 @@ Garantiert in erfolgreichen `--json`-Antworten:
 
 Optional (nur wenn zutreffend vorhanden):
 
-- `legacyModeMappedFrom` -- Nur vorhanden, wenn ein Legacy-Modus-Alias (`plan|build|unsafe`) auf ein Profil gemappt wurde.
 - `error` und `code` -- In Top-Level-Fehlerantworten (`ok: false`) vorhanden.
 
 Fuer jeden `toolCalls[]`-Record:

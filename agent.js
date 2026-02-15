@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.9";
+const AGENT_VERSION = "1.4.0";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -228,7 +228,6 @@ function parseCliArgs(argv) {
     maxFiles: null,
     maxImages: null,
     profile: "",
-    mode: "",
     approval: "",
     tools: "",
     files: [],
@@ -353,12 +352,6 @@ function parseCliArgs(argv) {
       continue;
     }
 
-    if (a === "--mode") {
-      opts.mode = argv[i + 1] || "";
-      i += 1;
-      continue;
-    }
-
     if (a === "--profile") {
       opts.profile = argv[i + 1] || "";
       i += 1;
@@ -455,7 +448,6 @@ function printHelp() {
     "  --max-files <n>        Max number of --file attachments (integer >= 0, 0 = unlimited)",
     "  --max-images <n>       Max number of --image attachments (integer >= 0, 0 = unlimited)",
     "  --profile <name>       Runtime profile (safe/dev/framework)",
-    "  --mode <name>          Security mode (plan/build/unsafe)",
     "  --approval <name>      Approval mode (ask/auto/never)",
     "  --tools <name>         Tools mode (auto/on/off)",
     "  --no-tools             Alias for --tools off",
@@ -487,7 +479,6 @@ function buildJsonOutputSchema() {
       provider: { type: "string" },
       model: { type: "string" },
       profile: { type: "string", enum: ["safe", "dev", "framework"] },
-      legacyModeMappedFrom: { type: "string" },
       mode: { type: "string" },
       approvalMode: { type: "string" },
       toolsMode: { type: "string" },
@@ -2121,36 +2112,22 @@ function evaluateCommandPolicy(cmd, opts, agentConfig) {
   return { allowed: true, profile, mode, source: "allow", rule: "matched" };
 }
 
-function normalizeProfileValue(raw) {
-  const v = String(raw || "").trim().toLowerCase();
-  if (!v) return "";
-  if (v === "safe" || v === "dev" || v === "framework") return v;
-  if (v === "unsafe") return "framework";
-  if (v === "plan") return "safe";
-  if (v === "build") return "dev";
-  return "";
-}
-
 function parseProfileValue(raw) {
   const v = String(raw || "").trim().toLowerCase();
   if (!v) return null;
   if (v === "safe" || v === "dev" || v === "framework") {
-    return { profile: v, legacy: false, legacyValue: "" };
+    return { profile: v };
   }
-  if (v === "unsafe") return { profile: "framework", legacy: true, legacyValue: "unsafe" };
-  if (v === "plan") return { profile: "safe", legacy: true, legacyValue: "plan" };
-  if (v === "build") return { profile: "dev", legacy: true, legacyValue: "build" };
   return null;
 }
 
 function getEffectiveProfileDetails(opts, agentConfig) {
   if (opts && opts.unsafe) {
-    return { profile: "framework", legacyModeMappedFrom: "unsafe" };
+    return { profile: "framework" };
   }
 
   const profileSources = [
     opts && typeof opts.profile === "string" ? opts.profile : "",
-    opts && typeof opts.mode === "string" ? opts.mode : "",
     agentConfig && agentConfig.runtime && typeof agentConfig.runtime.profile === "string" ? agentConfig.runtime.profile : "",
     agentConfig && agentConfig.security && typeof agentConfig.security.profile === "string" ? agentConfig.security.profile : "",
   ];
@@ -2158,33 +2135,17 @@ function getEffectiveProfileDetails(opts, agentConfig) {
   for (const source of profileSources) {
     const parsed = parseProfileValue(source);
     if (!parsed) continue;
-    return {
-      profile: parsed.profile,
-      legacyModeMappedFrom: parsed.legacy ? parsed.legacyValue : "",
-    };
+    return { profile: parsed.profile };
   }
 
-  const legacySources = [
-    agentConfig && agentConfig.security && typeof agentConfig.security.mode === "string" ? agentConfig.security.mode : "",
-    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.defaultMode === "string" ? agentConfig.runtime.defaultMode : "",
-  ];
-
-  for (const source of legacySources) {
-    const parsed = parseProfileValue(source);
-    if (!parsed) continue;
-    return {
-      profile: parsed.profile,
-      legacyModeMappedFrom: parsed.legacy ? parsed.legacyValue : "",
-    };
-  }
-
-  return { profile: "dev", legacyModeMappedFrom: "" };
+  return { profile: "dev" };
 }
 
 function profileToLegacyMode(profile) {
-  const p = normalizeProfileValue(profile) || "dev";
-  if (p === "safe") return "plan";
-  if (p === "framework") return "unsafe";
+  const p = parseProfileValue(profile);
+  const resolved = p ? p.profile : "dev";
+  if (resolved === "safe") return "plan";
+  if (resolved === "framework") return "unsafe";
   return "build";
 }
 
@@ -2858,9 +2819,8 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
  *
  * Supported environment variables:
  *   AGENT_MODEL    - provider/model (e.g. "openai/gpt-4.1")
- *   AGENT_PROFILE  - runtime profile: safe | dev | framework | unsafe(alias)
+ *   AGENT_PROFILE  - runtime profile: safe | dev | framework
  *   AGENT_API_KEY  - API key (overrides agent.auth.json)
- *   AGENT_MODE     - security mode: plan | build | unsafe
  *   AGENT_APPROVAL - approval mode: ask | auto | never
  *   AGENT_SYSTEM_PROMPT - optional system prompt (empty disables)
  *   AGENT_MAX_FILE_BYTES - max bytes per --file (integer >= 0, 0 = unlimited)
@@ -2876,7 +2836,6 @@ function applyEnvOverrides(opts) {
   const out = Object.assign({}, opts);
   const envModel = process.env.AGENT_MODEL || "";
   const envProfile = process.env.AGENT_PROFILE || "";
-  const envMode = process.env.AGENT_MODE || "";
   const envApproval = process.env.AGENT_APPROVAL || "";
   const envSystemPrompt = Object.prototype.hasOwnProperty.call(process.env, "AGENT_SYSTEM_PROMPT")
     ? String(process.env.AGENT_SYSTEM_PROMPT)
@@ -2898,7 +2857,6 @@ function applyEnvOverrides(opts) {
 
   if (!out.model && envModel) out.model = envModel;
   if (!out.profile && envProfile) out.profile = envProfile;
-  if (!out.mode && envMode) out.mode = envMode;
   if (!out.approval && envApproval) out.approval = envApproval;
   if (!out.systemPromptSet && envSystemPrompt !== null) out.systemPrompt = envSystemPrompt;
   if (out.maxFileBytes == null && envMaxFileBytes !== null) out.maxFileBytes = envMaxFileBytes;
@@ -3387,7 +3345,6 @@ async function main() {
     provider: runtime.provider,
     model: `${runtime.provider}/${runtime.model}`,
     profile: profileDetails.profile,
-    legacyModeMappedFrom: profileDetails.legacyModeMappedFrom || undefined,
     mode: getEffectiveMode(opts, agentConfig),
     approvalMode,
     toolsMode,

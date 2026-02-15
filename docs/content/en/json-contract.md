@@ -25,7 +25,7 @@ Guaranteed keys on success:
 
 Optional keys on success:
 
-- `legacyModeMappedFrom` (present only when legacy mode aliases were mapped)
+- None
 
 ### Error shape
 

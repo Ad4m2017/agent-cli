@@ -276,7 +276,6 @@ Guaranteed in successful `--json` responses:
 
 Optional (present only when applicable):
 
-- `legacyModeMappedFrom` -- Only present when a legacy mode alias (`plan|build|unsafe`) was mapped to a profile.
 - `error` and `code` -- Present on top-level failure responses (`ok: false`).
 
 For each `toolCalls[]` record:

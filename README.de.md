@@ -78,7 +78,7 @@ node agent-connect.js
 
 Der interaktive Wizard laesst dich einen Provider waehlen, deinen API-Key eingeben und Defaults setzen. Im TTY-Terminal: Pfeiltasten + Enter zur Navigation.
 
-Wizard-Highlights in `v1.3.9`:
+Wizard-Highlights in `v1.4.0`:
 - Provider-Statuslabels (`installed`, `installed, default`, `not configured`)
 - Schnellaktion `Set default provider/model only` (ohne komplettes Re-Setup)
 - Optionales Model-Refresh aus `/models` mit Fallback auf `models.dev`
@@ -119,14 +119,13 @@ Das erzeugt eine **agentische Schleife**: Die KI kann Dateien inspizieren, Tests
 
 Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine Sicherheitsrichtlinie in `agent.json` geprueft. Profile sind jetzt:
 
-| Profil | Zweck | Legacy-Modus-Alias |
-|--------|-------|--------------------|
-| `safe` | Konservativer Befehlsumfang | `plan` |
-| `dev` | Standard fuer Entwicklung | `build` |
-| `framework` | Breiter Befehlsumfang | `unsafe` |
+| Profil | Zweck |
+|--------|-------|
+| `safe` | Konservativer Befehlsumfang |
+| `dev` | Standard fuer Entwicklung |
+| `framework` | Breiter Befehlsumfang |
 
 Du kannst ein Profil mit `--profile` oder `runtime.profile` in `agent.json` waehlen.
-`--mode` bleibt als rueckwaertskompatibler Alias erhalten.
 
 Unabhaengig vom Modus blockiert eine `denyCritical`-Liste immer katastrophale Befehle wie `rm -rf /`, `mkfs` und das Pipen von curl/wget in eine Shell.
 
@@ -181,7 +180,6 @@ Optionen:
   --json                 Strukturiertes JSON mit Tool-Call-Details ausgeben
   --json-schema          JSON-Schema fuer --json-Output ausgeben
   --profile <name>       Runtime-Profil: safe, dev, framework
-  --mode <name>          Sicherheitsmodus (Legacy-Alias): plan, build, unsafe
   --approval <name>      Freigabemodus: ask, auto, never
   --tools <name>         Tools-Modus: auto, on, off
   --no-tools             Alias fuer --tools off
@@ -346,7 +344,7 @@ Das englische README ist verfuegbar unter [README.md](README.md).
 
 ## Version
 
-Aktuelle Version: `1.3.9` -- siehe [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: `1.4.0` -- siehe [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 

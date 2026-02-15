@@ -230,7 +230,7 @@ else:
 <p>Guaranteed in successful <code>--json</code> responses:</p>
 <ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
 <p>Optional (present only when applicable):</p>
-<ul><li><code>legacyModeMappedFrom</code> -- Only present when a legacy mode alias (<code>plan|build|unsafe</code>) was mapped to a profile.</li><li><code>error</code> and <code>code</code> -- Present on top-level failure responses (<code>ok: false</code>).</li></ul>
+<ul><li><code>error</code> and <code>code</code> -- Present on top-level failure responses (<code>ok: false</code>).</li></ul>
 <p>For each <code>toolCalls[]</code> record:</p>
 <ul><li>Guaranteed: <code>tool</code>, <code>input</code>, <code>ok</code>, <code>result</code>, <code>error</code>, <code>meta</code></li><li>Optional inside <code>error</code>: <code>code</code> may come from the tool (falls back to <code>TOOL_EXECUTION_ERROR</code>).</li></ul>
 <h3 id="tool-error-codes">Tool Error Codes</h3>

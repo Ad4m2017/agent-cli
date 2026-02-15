@@ -78,7 +78,7 @@ node agent-connect.js
 
 The interactive wizard lets you pick a provider, enter your API key, and set defaults. In TTY terminals, use arrow keys + Enter to navigate menus.
 
-Wizard highlights in `v1.3.9`:
+Wizard highlights in `v1.4.0`:
 - Provider status labels (`installed`, `installed, default`, `not configured`)
 - Quick action `Set default provider/model only` (no full reconfiguration needed)
 - Optional model refresh from live `/models` with fallback to `models.dev`
@@ -119,14 +119,13 @@ This creates an **agentic loop**: the AI can inspect files, run tests, check git
 
 Every command the AI wants to run is checked against a security policy defined in `agent.json`. Profile selection is now:
 
-| Profile | Purpose | Legacy Mode Alias |
-|---------|---------|-------------------|
-| `safe` | Conservative command scope | `plan` |
-| `dev` | Normal development defaults | `build` |
-| `framework` | Broad command scope | `unsafe` |
+| Profile | Purpose |
+|---------|---------|
+| `safe` | Conservative command scope |
+| `dev` | Normal development defaults |
+| `framework` | Broad command scope |
 
 You can select a profile via `--profile` or `runtime.profile` in `agent.json`.
-`--mode` is still accepted as a backward-compatible alias.
 
 Regardless of mode, a `denyCritical` list always blocks catastrophic commands like `rm -rf /`, `mkfs`, and piping curl/wget into shell.
 
@@ -181,7 +180,6 @@ Options:
   --json                 Output structured JSON with tool call details
   --json-schema          Print JSON schema for --json output
   --profile <name>       Runtime profile: safe, dev, framework
-  --mode <name>          Security mode (legacy alias): plan, build, unsafe
   --approval <name>      Approval mode: ask, auto, never
   --tools <name>         Tools mode: auto, on, off
   --no-tools             Alias for --tools off
@@ -346,7 +344,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `1.3.9` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `1.4.0` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

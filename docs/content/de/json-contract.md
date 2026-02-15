@@ -25,7 +25,7 @@ Garantierte Keys bei Erfolg:
 
 Optionale Keys bei Erfolg:
 
-- `legacyModeMappedFrom` (nur vorhanden, wenn Legacy-Modus-Aliase gemappt wurden)
+- Keine
 
 ### Fehler-Form
 

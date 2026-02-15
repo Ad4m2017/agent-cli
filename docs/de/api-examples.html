@@ -230,7 +230,7 @@ else:
 <p>Garantiert in erfolgreichen <code>--json</code>-Antworten:</p>
 <ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
 <p>Optional (nur wenn zutreffend vorhanden):</p>
-<ul><li><code>legacyModeMappedFrom</code> -- Nur vorhanden, wenn ein Legacy-Modus-Alias (<code>plan|build|unsafe</code>) auf ein Profil gemappt wurde.</li><li><code>error</code> und <code>code</code> -- In Top-Level-Fehlerantworten (<code>ok: false</code>) vorhanden.</li></ul>
+<ul><li><code>error</code> und <code>code</code> -- In Top-Level-Fehlerantworten (<code>ok: false</code>) vorhanden.</li></ul>
 <p>Fuer jeden <code>toolCalls[]</code>-Record:</p>
 <ul><li>Garantiert: <code>tool</code>, <code>input</code>, <code>ok</code>, <code>result</code>, <code>error</code>, <code>meta</code></li><li>Optional innerhalb von <code>error</code>: <code>code</code> kann vom Tool kommen (Fallback auf <code>TOOL_EXECUTION_ERROR</code>).</li></ul>
 <h3 id="tool-fehlercodes">Tool-Fehlercodes</h3>

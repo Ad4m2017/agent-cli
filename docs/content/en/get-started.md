@@ -251,7 +251,6 @@ Options:
   --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)
   --json
   --profile <safe|dev|framework>
-  --mode <plan|build|unsafe>   # legacy alias
   --approval <ask|auto|never>
   --tools <auto|on|off>
   --no-tools

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.4.0] - 2026-02-15
+
+### Changed
+- Removed legacy `--mode` CLI behavior and profile mapping fallbacks; profile selection is now profile-only (`--profile safe|dev|framework`) plus `--unsafe` override.
+- Removed legacy-mode metadata references from tests and docs (`legacyModeMappedFrom`, `AGENT_MODE`, and `--mode` usage text).
+- Updated unit tests to validate profile-first policy and environment precedence without mode aliases.
+- Bumped versions to `1.4.0` in `agent.js`, `agent-connect.js`, and `package.json`.
+- Updated README and docs references to `1.4.0`.
+
 ## [1.3.9] - 2026-02-15
 
 ### Added
