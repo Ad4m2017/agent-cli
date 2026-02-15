@@ -1812,6 +1812,28 @@ function applyPatchTool(args) {
   return { ok: true, results };
 }
 
+function buildToolCallRecord(toolName, inputArgs, rawResult, durationMs) {
+  const normalizedInput = inputArgs && typeof inputArgs === "object" ? inputArgs : {};
+  const base = rawResult && typeof rawResult === "object" ? rawResult : { ok: false, error: String(rawResult || "Unknown error") };
+  const ok = !!base.ok;
+  return {
+    tool: String(toolName || ""),
+    input: normalizedInput,
+    ok,
+    result: ok ? base : null,
+    error: ok
+      ? null
+      : {
+          message: base && base.error ? String(base.error) : "Tool execution failed",
+          code: base && typeof base.code === "string" ? base.code : "",
+        },
+    meta: {
+      duration_ms: Number.isFinite(Number(durationMs)) ? Math.max(0, Math.round(Number(durationMs))) : 0,
+      ts: new Date().toISOString(),
+    },
+  };
+}
+
 /**
  * Parse "provider/model" form.
  * Returns null when format does not include provider prefix.
@@ -1990,6 +2012,56 @@ function normalizeProfileValue(raw) {
   return "";
 }
 
+function parseProfileValue(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  if (!v) return null;
+  if (v === "safe" || v === "dev" || v === "framework") {
+    return { profile: v, legacy: false, legacyValue: "" };
+  }
+  if (v === "unsafe") return { profile: "framework", legacy: true, legacyValue: "unsafe" };
+  if (v === "plan") return { profile: "safe", legacy: true, legacyValue: "plan" };
+  if (v === "build") return { profile: "dev", legacy: true, legacyValue: "build" };
+  return null;
+}
+
+function getEffectiveProfileDetails(opts, agentConfig) {
+  if (opts && opts.unsafe) {
+    return { profile: "framework", legacyModeMappedFrom: "unsafe" };
+  }
+
+  const profileSources = [
+    opts && typeof opts.profile === "string" ? opts.profile : "",
+    opts && typeof opts.mode === "string" ? opts.mode : "",
+    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.profile === "string" ? agentConfig.runtime.profile : "",
+    agentConfig && agentConfig.security && typeof agentConfig.security.profile === "string" ? agentConfig.security.profile : "",
+  ];
+
+  for (const source of profileSources) {
+    const parsed = parseProfileValue(source);
+    if (!parsed) continue;
+    return {
+      profile: parsed.profile,
+      legacyModeMappedFrom: parsed.legacy ? parsed.legacyValue : "",
+    };
+  }
+
+  const legacySources = [
+    agentConfig && agentConfig.security && typeof agentConfig.security.mode === "string" ? agentConfig.security.mode : "",
+    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.defaultMode === "string" ? agentConfig.runtime.defaultMode : "",
+  ];
+
+  for (const source of legacySources) {
+    const parsed = parseProfileValue(source);
+    if (!parsed) continue;
+    return {
+      profile: parsed.profile,
+      legacyModeMappedFrom: parsed.legacy ? parsed.legacyValue : "",
+    };
+  }
+
+  return { profile: "dev", legacyModeMappedFrom: "" };
+}
+
 function profileToLegacyMode(profile) {
   const p = normalizeProfileValue(profile) || "dev";
   if (p === "safe") return "plan";
@@ -1998,22 +2070,7 @@ function profileToLegacyMode(profile) {
 }
 
 function getEffectiveProfile(opts, agentConfig) {
-  if (opts && opts.unsafe) return "framework";
-
-  const candidates = [
-    opts && typeof opts.profile === "string" ? opts.profile : "",
-    opts && typeof opts.mode === "string" ? opts.mode : "",
-    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.profile === "string" ? agentConfig.runtime.profile : "",
-    agentConfig && agentConfig.security && typeof agentConfig.security.profile === "string" ? agentConfig.security.profile : "",
-    agentConfig && agentConfig.security && typeof agentConfig.security.mode === "string" ? agentConfig.security.mode : "",
-    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.defaultMode === "string" ? agentConfig.runtime.defaultMode : "",
-  ];
-
-  for (const c of candidates) {
-    const n = normalizeProfileValue(c);
-    if (n) return n;
-  }
-  return "dev";
+  return getEffectiveProfileDetails(opts, agentConfig).profile;
 }
 
 /** Resolve current legacy security mode from profile. */
@@ -3043,6 +3100,7 @@ async function main() {
     total_tokens: 0,
   };
   const maxTurns = 5;
+  const profileDetails = getEffectiveProfileDetails(opts, agentConfig);
 
   for (let turn = 0; turn < maxTurns; turn += 1) {
     const request = {
@@ -3160,6 +3218,7 @@ async function main() {
       }
 
       let result;
+      const toolStart = Date.now();
       if (name === "read_file") {
         result = readFileTool(args);
       } else if (name === "list_files") {
@@ -3182,11 +3241,13 @@ async function main() {
         result = { ok: false, error: `Unknown tool: ${name}` };
       }
 
-      toolCalls.push({ name, args, result });
+      const record = buildToolCallRecord(name, args, result, Date.now() - toolStart);
+
+      toolCalls.push(record);
       messages.push({
         role: "tool",
         tool_call_id: call.id,
-        content: JSON.stringify(result),
+        content: JSON.stringify(record),
       });
     }
   }
@@ -3201,7 +3262,8 @@ async function main() {
     ok: true,
     provider: runtime.provider,
     model: `${runtime.provider}/${runtime.model}`,
-    profile: getEffectiveProfile(opts, agentConfig),
+    profile: profileDetails.profile,
+    legacyModeMappedFrom: profileDetails.legacyModeMappedFrom || undefined,
     mode: getEffectiveMode(opts, agentConfig),
     approvalMode,
     toolsMode,
@@ -3281,6 +3343,8 @@ module.exports = {
   tokenizeCommand,
   matchesPolicyRule,
   evaluateCommandPolicy,
+  parseProfileValue,
+  getEffectiveProfileDetails,
   getEffectiveProfile,
   getEffectiveMode,
   getEffectiveApprovalMode,
@@ -3307,6 +3371,7 @@ module.exports = {
   moveFileTool,
   mkdirTool,
   applyPatchTool,
+  buildToolCallRecord,
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
   selectTopModels,

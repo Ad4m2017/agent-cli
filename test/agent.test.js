@@ -34,6 +34,8 @@ const {
   tokenizeCommand,
   matchesPolicyRule,
   evaluateCommandPolicy,
+  parseProfileValue,
+  getEffectiveProfileDetails,
   getEffectiveMode,
   getEffectiveProfile,
   getEffectiveApprovalMode,
@@ -60,6 +62,7 @@ const {
   moveFileTool,
   mkdirTool,
   applyPatchTool,
+  buildToolCallRecord,
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
   selectTopModels,
@@ -576,6 +579,37 @@ describe("getEffectiveProfile", () => {
 
   it("defaults to dev", () => {
     assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, null), "dev");
+  });
+
+  it("prefers profile sources over legacy mode", () => {
+    const cfg = { runtime: { profile: "safe", defaultMode: "unsafe" }, security: { mode: "unsafe" } };
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, cfg), "safe");
+  });
+});
+
+describe("getEffectiveProfileDetails", () => {
+  it("returns legacy mapping metadata when using legacy mode", () => {
+    const d = getEffectiveProfileDetails({ unsafe: false, profile: "", mode: "plan" }, null);
+    assert.equal(d.profile, "safe");
+    assert.equal(d.legacyModeMappedFrom, "plan");
+  });
+
+  it("does not report legacy mapping when using profile", () => {
+    const d = getEffectiveProfileDetails({ unsafe: false, profile: "framework", mode: "plan" }, null);
+    assert.equal(d.profile, "framework");
+    assert.equal(d.legacyModeMappedFrom, "");
+  });
+});
+
+describe("parseProfileValue", () => {
+  it("parses current and legacy values", () => {
+    assert.deepEqual(parseProfileValue("safe"), { profile: "safe", legacy: false, legacyValue: "" });
+    assert.deepEqual(parseProfileValue("build"), { profile: "dev", legacy: true, legacyValue: "build" });
+    assert.deepEqual(parseProfileValue("unsafe"), { profile: "framework", legacy: true, legacyValue: "unsafe" });
+  });
+
+  it("returns null for invalid values", () => {
+    assert.equal(parseProfileValue("banana"), null);
   });
 });
 
@@ -1755,6 +1789,25 @@ describe("specialized file tools", () => {
       process.chdir(cwdBefore);
       fs.rmSync(tmp, { recursive: true, force: true });
     }
+  });
+});
+
+describe("buildToolCallRecord", () => {
+  it("normalizes successful tool result", () => {
+    const rec = buildToolCallRecord("read_file", { path: "a.txt" }, { ok: true, content: "x" }, 12.2);
+    assert.equal(rec.tool, "read_file");
+    assert.equal(rec.ok, true);
+    assert.equal(rec.error, null);
+    assert.equal(rec.result.ok, true);
+    assert.equal(rec.meta.duration_ms, 12);
+    assert.match(rec.meta.ts, /T/);
+  });
+
+  it("normalizes failed tool result", () => {
+    const rec = buildToolCallRecord("write_file", { path: "a.txt" }, { ok: false, error: "boom" }, 0);
+    assert.equal(rec.ok, false);
+    assert.equal(rec.result, null);
+    assert.equal(rec.error.message, "boom");
   });
 });
 
