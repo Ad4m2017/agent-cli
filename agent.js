@@ -94,6 +94,9 @@ const DEFAULT_RETRY_OPTS = {
   retryableStatuses: [500, 502, 503],
 };
 
+let CACHED_CHAT_TOOLS = null;
+const POLICY_REGEX_CACHE = new Map();
+
 /**
  * Parse the Retry-After HTTP header into milliseconds.
  * Supports both delta-seconds ("120") and HTTP-date formats.
@@ -2154,7 +2157,11 @@ function matchesPolicyRule(rule, cmd) {
 
   if (normalizedRule === "*") return true;
   if (normalizedRule.startsWith("re:")) {
-    const rx = new RegExp(normalizedRule.slice(3), "i");
+    let rx = POLICY_REGEX_CACHE.get(normalizedRule);
+    if (!rx) {
+      rx = new RegExp(normalizedRule.slice(3), "i");
+      POLICY_REGEX_CACHE.set(normalizedRule, rx);
+    }
     return rx.test(cmd);
   }
 
@@ -2172,21 +2179,22 @@ function evaluateCommandPolicy(cmd, opts, agentConfig) {
   const modeConfig = modes[mode] || modes.dev || defaultAgentConfig().security.modes.dev;
 
   const denyCritical = Array.isArray(security.denyCritical) ? security.denyCritical : [];
+  const command = String(cmd || "");
   for (const rule of denyCritical) {
-    if (matchesPolicyRule(rule, cmd)) {
+    if (matchesPolicyRule(rule, command)) {
       return { allowed: false, profile, mode, source: "denyCritical", rule };
     }
   }
 
   const deny = Array.isArray(modeConfig.deny) ? modeConfig.deny : [];
   for (const rule of deny) {
-    if (matchesPolicyRule(rule, cmd)) {
+    if (matchesPolicyRule(rule, command)) {
       return { allowed: false, profile, mode, source: "deny", rule };
     }
   }
 
   const allow = Array.isArray(modeConfig.allow) ? modeConfig.allow : [];
-  const isAllowed = allow.some((rule) => matchesPolicyRule(rule, cmd));
+  const isAllowed = allow.some((rule) => matchesPolicyRule(rule, command));
   if (!isAllowed) {
     return { allowed: false, profile, mode, source: "allow", rule: "no allow rule matched" };
   }
@@ -2628,6 +2636,17 @@ async function runCommandTool(args, options, agentConfig) {
     };
   }
 }
+
+const SYNC_TOOL_EXECUTORS = Object.assign(Object.create(null), {
+  read_file: readFileTool,
+  list_files: listFilesTool,
+  search_content: searchContentTool,
+  write_file: writeFileTool,
+  delete_file: deleteFileTool,
+  move_file: moveFileTool,
+  mkdir: mkdirTool,
+  apply_patch: applyPatchTool,
+});
 
 /** Small wrapper for easier testing/mocking of current time. */
 function nowMs() {
@@ -3112,7 +3131,7 @@ async function main() {
   const runtime = await createProviderRuntime(providerConfig, selection, paths.authConfigPath, opts);
   logger.debug(`Runtime resolved: provider='${runtime.provider}' model='${runtime.model}' base='${runtime.baseURL}'`);
 
-  const tools = [
+  const tools = CACHED_CHAT_TOOLS || (CACHED_CHAT_TOOLS = [
     {
       type: "function",
       function: {
@@ -3281,7 +3300,7 @@ async function main() {
         },
       },
     },
-  ];
+  ]);
 
   const messages = [];
   if (systemPrompt && systemPrompt.trim()) {
@@ -3290,6 +3309,7 @@ async function main() {
   messages.push({ role: "user", content: buildUserMessageContent(opts.message, attachments) });
 
   const toolCalls = [];
+  let failedToolCalls = 0;
   let finalText = "";
   let streamedFinalOutput = false;
   let toolsEnabled = toolsMode !== "off";
@@ -3428,22 +3448,11 @@ async function main() {
 
       let result;
       const toolStart = Date.now();
-      if (name === "read_file") {
-        result = readFileTool(args);
-      } else if (name === "list_files") {
-        result = listFilesTool(args);
-      } else if (name === "search_content") {
-        result = searchContentTool(args);
-      } else if (name === "write_file") {
-        result = writeFileTool(args);
-      } else if (name === "delete_file") {
-        result = deleteFileTool(args);
-      } else if (name === "move_file") {
-        result = moveFileTool(args);
-      } else if (name === "mkdir") {
-        result = mkdirTool(args);
-      } else if (name === "apply_patch") {
-        result = applyPatchTool(args);
+      const syncExecutor = Object.prototype.hasOwnProperty.call(SYNC_TOOL_EXECUTORS, name)
+        ? SYNC_TOOL_EXECUTORS[name]
+        : null;
+      if (syncExecutor) {
+        result = syncExecutor(args);
       } else if (name === "run_command") {
         result = await runCommandTool(args, opts, agentConfig);
       } else {
@@ -3453,6 +3462,7 @@ async function main() {
       const record = buildToolCallRecord(name, args, result, Date.now() - toolStart);
 
       toolCalls.push(record);
+      if (!record.ok) failedToolCalls += 1;
       messages.push({
         role: "tool",
         tool_call_id: call.id,
@@ -3466,8 +3476,6 @@ async function main() {
       `Warning: Maximum tool-call turns (${maxTurns}) reached without a final answer.\n`
     );
   }
-
-  const failedToolCalls = toolCalls.filter((t) => !t.ok).length;
 
   const payload = {
     ok: true,
