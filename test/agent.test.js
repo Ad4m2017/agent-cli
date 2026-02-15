@@ -30,6 +30,9 @@ const {
   getExitCodeForError,
   defaultAgentConfig,
   splitProviderModel,
+  normalizeProviderName,
+  listConfiguredProviders,
+  suggestProviderName,
   resolveModelSelection,
   getProviderEntry,
   tokenizeCommand,
@@ -431,6 +434,35 @@ describe("resolveModelSelection", () => {
     const result = resolveModelSelection(opts, agentConfig, null);
     assert.equal(result.provider, "copilot");
     assert.equal(result.model, "gpt-4o");
+  });
+
+  it("normalizes provider prefix and defaultProvider", () => {
+    const opts = { model: " OpenAI /gpt-4o" };
+    const result = resolveModelSelection(opts, { runtime: { defaultProvider: " COPILOT " } }, null);
+    assert.equal(result.provider, "openai");
+    assert.equal(result.model, "gpt-4o");
+
+    const fallback = resolveModelSelection({ model: "gpt-4o" }, { runtime: { defaultProvider: " COPILOT " } }, null);
+    assert.equal(fallback.provider, "copilot");
+  });
+});
+
+describe("provider helper functions", () => {
+  it("normalizes provider names", () => {
+    assert.equal(normalizeProviderName(" OpenAI "), "openai");
+    assert.equal(normalizeProviderName(""), "");
+  });
+
+  it("lists configured providers normalized and sorted", () => {
+    const cfg = { providers: { OpenAI: {}, " copilot ": {}, groq: {} } };
+    assert.deepEqual(listConfiguredProviders(cfg), ["copilot", "groq", "openai"]);
+  });
+
+  it("suggests closest configured provider", () => {
+    const providers = ["copilot", "openai", "groq"];
+    assert.equal(suggestProviderName("open", providers), "openai");
+    assert.equal(suggestProviderName("Cop", providers), "copilot");
+    assert.equal(suggestProviderName("xai", providers), "");
   });
 });
 

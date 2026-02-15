@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.5.1";
+const AGENT_VERSION = "1.5.2";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -2011,6 +2011,34 @@ function splitProviderModel(value) {
   };
 }
 
+function normalizeProviderName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function listConfiguredProviders(config) {
+  if (!config || !config.providers || typeof config.providers !== "object") return [];
+  return Object.keys(config.providers)
+    .map((name) => normalizeProviderName(name))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function suggestProviderName(input, configuredProviders) {
+  const target = normalizeProviderName(input);
+  if (!target || !Array.isArray(configuredProviders) || configuredProviders.length === 0) return "";
+
+  for (const candidate of configuredProviders) {
+    if (candidate === target) return candidate;
+  }
+  for (const candidate of configuredProviders) {
+    if (candidate.startsWith(target) || target.startsWith(candidate)) return candidate;
+  }
+  for (const candidate of configuredProviders) {
+    if (candidate.includes(target) || target.includes(candidate)) return candidate;
+  }
+  return "";
+}
+
 /**
  * Resolve final provider/model selection.
  * Precedence:
@@ -2027,12 +2055,13 @@ function resolveModelSelection(opts, agentConfig, providerConfig) {
       : providerConfig && typeof providerConfig.defaultModel === "string"
         ? providerConfig.defaultModel
         : "";
-  const configuredDefaultProvider =
+  const configuredDefaultProviderRaw =
     agentConfig && agentConfig.runtime && typeof agentConfig.runtime.defaultProvider === "string"
       ? agentConfig.runtime.defaultProvider
       : providerConfig && typeof providerConfig.defaultProvider === "string"
         ? providerConfig.defaultProvider
         : "";
+  const configuredDefaultProvider = normalizeProviderName(configuredDefaultProviderRaw);
 
   let modelInput = opts.model || configuredDefaultModel || "gpt-4.1-mini";
   let provider = "";
@@ -2040,7 +2069,7 @@ function resolveModelSelection(opts, agentConfig, providerConfig) {
 
   const explicit = splitProviderModel(modelInput);
   if (explicit) {
-    provider = explicit.provider;
+    provider = normalizeProviderName(explicit.provider);
     model = explicit.model;
     return { provider, model, normalized: `${provider}/${model}` };
   }
@@ -2797,6 +2826,10 @@ async function ensureCopilotRuntimeToken(config, providerName, entry, authConfig
 async function createProviderRuntime(config, selection, authConfigPath, opts) {
   const providerName = selection.provider;
   const entry = getProviderEntry(config, providerName);
+  const configuredProviders = listConfiguredProviders(config);
+  const providerHint = suggestProviderName(providerName, configuredProviders);
+  const providersText = configuredProviders.length > 0 ? ` Available providers: ${configuredProviders.join(", ")}.` : "";
+  const hintText = providerHint && providerHint !== providerName ? ` Did you mean '${providerHint}'?` : "";
 
   // When no auth config entry exists but AGENT_API_KEY is set,
   // allow env-only runtime creation (useful for CI/CD without agent.auth.json).
@@ -2813,7 +2846,7 @@ async function createProviderRuntime(config, selection, authConfigPath, opts) {
       };
     }
     const e = new Error(
-      `Provider '${providerName}' is not configured. Setup: node agent-connect.js --provider ${providerName}`
+      `Provider '${providerName}' is not configured.${providersText}${hintText} Setup: node agent-connect.js --provider ${providerName}`
     );
     e.code = ERROR_CODES.PROVIDER_NOT_CONFIGURED;
     throw e;
@@ -3534,6 +3567,9 @@ module.exports = {
   getExitCodeForError,
   defaultAgentConfig,
   splitProviderModel,
+  normalizeProviderName,
+  listConfiguredProviders,
+  suggestProviderName,
   resolveModelSelection,
   getProviderEntry,
   tokenizeCommand,

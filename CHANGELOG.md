@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.2] - 2026-02-15
+
+### Changed
+- Improved provider selection UX by normalizing provider names (`openai`, `OpenAI`, and ` openai ` resolve consistently).
+- Added provider suggestions when a selected provider is not configured, including a list of configured providers in the error message.
+- Extended unit tests for provider normalization/suggestion helpers and model selection behavior.
+- Bumped versions to `1.5.2` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.1] - 2026-02-15
 
 ### Added
