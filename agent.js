@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.3";
+const AGENT_VERSION = "1.3.4";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -1187,9 +1187,9 @@ function formatHumanNumber(value) {
   if (abs < 1000) return String(Math.round(n));
 
   const units = [
-    { limit: 1_000_000_000, suffix: "b" },
-    { limit: 1_000_000, suffix: "m" },
-    { limit: 1000, suffix: "k" },
+    { limit: 1_000_000_000, suffix: "B" },
+    { limit: 1_000_000, suffix: "M" },
+    { limit: 1000, suffix: "K" },
   ];
 
   for (const u of units) {
@@ -1208,45 +1208,139 @@ function formatUsageMetric(value) {
   return `${n} (${formatHumanNumber(n)})`;
 }
 
-function formatUsageStatsText(report, statsConfig) {
-  const lines = [
-    "Usage Stats",
-    `- file: ${statsConfig.filePath}`,
-    `- requests_total: ${report.requests_total}`,
-    `- requests_with_usage: ${report.requests_with_usage}`,
-    `- requests_usage_missing: ${report.requests_usage_missing}`,
-    `- input_tokens: ${formatUsageMetric(report.input_tokens)}`,
-    `- output_tokens: ${formatUsageMetric(report.output_tokens)}`,
-    `- total_tokens: ${formatUsageMetric(report.total_tokens)}`,
-  ];
+function formatNumberWithCommas(value) {
+  const n = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+  return n.toLocaleString("en-US");
+}
 
-  const providerNames = Object.keys(report.by_provider).sort();
+function formatOverviewMetric(value) {
+  const n = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+  return `${formatHumanNumber(n)} (${formatNumberWithCommas(n)})`;
+}
+
+function fitCell(text, width) {
+  const s = String(text == null ? "" : text);
+  if (s.length <= width) return s;
+  if (width <= 1) return s.slice(0, width);
+  return `${s.slice(0, width - 1)}…`;
+}
+
+function buildStatsBox(title, rows, width) {
+  const w = Number.isInteger(width) && width >= 24 ? width : 56;
+  const inner = w - 2;
+  const top = `┌${"─".repeat(inner)}┐`;
+  const sep = `├${"─".repeat(inner)}┤`;
+  const bottom = `└${"─".repeat(inner)}┘`;
+  const headerText = fitCell(String(title || "").toUpperCase(), inner);
+  const headerPadLeft = Math.floor((inner - headerText.length) / 2);
+  const headerPadRight = inner - headerText.length - headerPadLeft;
+  const lines = [top, `│${" ".repeat(headerPadLeft)}${headerText}${" ".repeat(headerPadRight)}│`, sep];
+
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const label = String(row.label || "");
+    const value = String(row.value || "");
+
+    if (!value) {
+      const t = fitCell(label, inner);
+      lines.push(`│${t}${" ".repeat(inner - t.length)}│`);
+      continue;
+    }
+
+    const valueFit = fitCell(value, Math.max(1, inner - 2));
+    const maxLabel = Math.max(1, inner - valueFit.length - 1);
+    const labelFit = fitCell(label, maxLabel);
+    const spaces = inner - labelFit.length - valueFit.length;
+    lines.push(`│${labelFit}${" ".repeat(spaces)}${valueFit}│`);
+  }
+
+  lines.push(bottom);
+  return lines.join("\n");
+}
+
+function resolveStatsBoxWidth() {
+  const cols =
+    process && process.stdout && Number.isFinite(Number(process.stdout.columns))
+      ? Number(process.stdout.columns)
+      : NaN;
+  if (!Number.isFinite(cols) || cols <= 0) return 56;
+  const preferred = Math.floor(cols) - 2;
+  if (preferred < 24) return 24;
+  if (preferred > 56) return 56;
+  return preferred;
+}
+
+function formatUsageStatsText(report, statsConfig) {
+  const sections = [];
+  const width = resolveStatsBoxWidth();
+  const modelsShown = Number.isFinite(report.models_shown_count) ? report.models_shown_count : Object.keys(report.by_model || {}).length;
+  const modelsTotal = Number.isFinite(report.models_total_count) ? report.models_total_count : modelsShown;
+
+  sections.push(
+    buildStatsBox(
+      "Overview",
+      [
+        { label: "Input", value: formatOverviewMetric(report.input_tokens) },
+        { label: "Output", value: formatOverviewMetric(report.output_tokens) },
+        { label: "Total", value: formatOverviewMetric(report.total_tokens) },
+        { label: "Requests", value: formatNumberWithCommas(report.requests_total) },
+        { label: "With Usage", value: formatNumberWithCommas(report.requests_with_usage) },
+        { label: "Missing Usage", value: formatNumberWithCommas(report.requests_usage_missing) },
+        { label: "Models Shown", value: `${modelsShown}/${modelsTotal}` },
+      ],
+      width
+    )
+  );
+
+  const providerNames = Object.keys(report.by_provider || {}).sort((a, b) => {
+    const av = report.by_provider[a] || {};
+    const bv = report.by_provider[b] || {};
+    const bt = toUsageTokenValue(bv.total_tokens) || 0;
+    const at = toUsageTokenValue(av.total_tokens) || 0;
+    if (bt !== at) return bt - at;
+    return String(a).localeCompare(String(b));
+  });
+
   if (providerNames.length > 0) {
-    lines.push("", "By Provider");
     for (const name of providerNames) {
       const p = report.by_provider[name];
-      lines.push(
-        `- ${name}: requests=${p.requests_total}, with_usage=${p.requests_with_usage}, input_tokens=${formatUsageMetric(p.input_tokens)}, output_tokens=${formatUsageMetric(p.output_tokens)}, total_tokens=${formatUsageMetric(p.total_tokens)}`
+      sections.push(
+        buildStatsBox(
+          "Provider Usage",
+          [
+            { label: name },
+            { label: "Messages", value: formatNumberWithCommas(p.requests_total) },
+            { label: "Input Tokens", value: formatHumanNumber(p.input_tokens) },
+            { label: "Output Tokens", value: formatHumanNumber(p.output_tokens) },
+            { label: "Total Tokens", value: formatHumanNumber(p.total_tokens) },
+          ],
+          width
+        )
       );
     }
   }
 
-  if (Number.isFinite(report.models_total_count) && Number.isFinite(report.models_shown_count)) {
-    lines.push(`- models_shown: ${report.models_shown_count}/${report.models_total_count}`);
-  }
-
-  const modelNames = Object.keys(report.by_model);
+  const modelNames = Object.keys(report.by_model || {});
   if (modelNames.length > 0) {
-    lines.push("", "By Model");
     for (const name of modelNames) {
       const m = report.by_model[name];
-      lines.push(
-        `- ${name}: requests=${m.requests_total}, with_usage=${m.requests_with_usage}, input_tokens=${formatUsageMetric(m.input_tokens)}, output_tokens=${formatUsageMetric(m.output_tokens)}, total_tokens=${formatUsageMetric(m.total_tokens)}`
+      sections.push(
+        buildStatsBox(
+          "Model Usage",
+          [
+            { label: name },
+            { label: "Messages", value: formatNumberWithCommas(m.requests_total) },
+            { label: "Input Tokens", value: formatHumanNumber(m.input_tokens) },
+            { label: "Output Tokens", value: formatHumanNumber(m.output_tokens) },
+            { label: "Total Tokens", value: formatHumanNumber(m.total_tokens) },
+          ],
+          width
+        )
       );
     }
   }
 
-  return `${lines.join("\n")}\n`;
+  return `${sections.join("\n\n")}\n`;
 }
 
 function collectAttachments(opts, limits) {

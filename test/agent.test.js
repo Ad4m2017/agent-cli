@@ -1593,7 +1593,7 @@ describe("selectTopModels", () => {
 });
 
 describe("formatUsageStatsText", () => {
-  it("includes input/output tokens for provider/model with human-readable values", () => {
+  it("renders pretty box output with provider/model sections", () => {
     const report = buildUsageStatsReport([
       {
         provider: "openai",
@@ -1607,13 +1607,15 @@ describe("formatUsageStatsText", () => {
     ]);
 
     const out = formatUsageStatsText(report, { filePath: "/tmp/.agent-usage.ndjson" });
-    assert.match(out, /input_tokens: 12345 \(12\.3k\)/);
-    assert.match(out, /output_tokens: 6789 \(6\.79k\)/);
-    assert.match(out, /total_tokens: 19134 \(19\.1k\)/);
-    assert.match(out, /By Provider/);
-    assert.match(out, /openai: requests=1, with_usage=1, input_tokens=12345 \(12\.3k\), output_tokens=6789 \(6\.79k\), total_tokens=19134 \(19\.1k\)/);
-    assert.match(out, /By Model/);
-    assert.match(out, /openai\/gpt-5-mini: requests=1, with_usage=1, input_tokens=12345 \(12\.3k\), output_tokens=6789 \(6\.79k\), total_tokens=19134 \(19\.1k\)/);
+    assert.match(out, /┌/);
+    assert.match(out, /OVERVIEW/);
+    assert.match(out, /MODEL USAGE/);
+    assert.match(out, /PROVIDER USAGE/);
+    assert.match(out, /Input\s+12\.3K \(12,345\)/);
+    assert.match(out, /Output\s+6\.79K \(6,789\)/);
+    assert.match(out, /Total\s+19\.1K \(19,134\)/);
+    assert.match(out, /openai\/gpt-5-mini/);
+    assert.match(out, /Messages\s+1/);
   });
 });
 

@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.4] - 2026-02-15
+
+### Changed
+- `--stats` text output now uses a boxed pretty layout (`OVERVIEW`, `PROVIDER USAGE`, `MODEL USAGE`).
+- Stats token suffixes now use uppercase compact units (`K`, `M`, `B`).
+- Stats box width is now terminal-aware with dynamic sizing (max 56 columns, min 24 columns).
+- Version bumped from `1.3.3` to `1.3.4` in `agent.js`, `agent-connect.js`, and `package.json`.
+- README version labels updated in `README.md` and `README.de.md`.
+
 ## [1.3.3] - 2026-02-15
 
 ### Added
