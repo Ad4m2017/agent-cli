@@ -249,11 +249,54 @@ else:
   "result": null,
   "error": {
     "message": "BLOCKED: Command not allowed in mode 'build': rm -rf /",
-    "code": ""
+    "code": "TOOL_EXECUTION_ERROR"
   },
   "meta": { "duration_ms": 3, "ts": "2026-02-15T12:00:01.000Z" }
 }
 ```
+
+### Garantierte vs optionale Felder
+
+Garantiert in erfolgreichen `--json`-Antworten:
+
+- `ok`
+- `provider`
+- `model`
+- `profile`
+- `mode`
+- `approvalMode`
+- `toolsMode`
+- `toolsEnabled`
+- `toolsFallbackUsed`
+- `attachments`
+- `usage`
+- `message`
+- `toolCalls`
+- `timingMs`
+
+Optional (nur wenn zutreffend vorhanden):
+
+- `legacyModeMappedFrom` -- Nur vorhanden, wenn ein Legacy-Modus-Alias (`plan|build|unsafe`) auf ein Profil gemappt wurde.
+- `error` und `code` -- In Top-Level-Fehlerantworten (`ok: false`) vorhanden.
+
+Fuer jeden `toolCalls[]`-Record:
+
+- Garantiert: `tool`, `input`, `ok`, `result`, `error`, `meta`
+- Optional innerhalb von `error`: `code` kann vom Tool kommen (Fallback auf `TOOL_EXECUTION_ERROR`).
+
+### Tool-Fehlercodes
+
+Hauefige Tool-Fehlercodes in normalisierten Tool-Call-Records:
+
+| Code | Bedeutung | Typische Loesung |
+|------|-----------|------------------|
+| `TOOL_INVALID_ARGS` | Fehlende/ungueltige Tool-Argumente | Tool-Input-Payload validieren |
+| `TOOL_NOT_FOUND` | Datei/Pfad-Ziel nicht gefunden | Zielpfad pruefen |
+| `TOOL_INVALID_PATTERN` | Ungueltiges Regex-Pattern | Regex-Syntax korrigieren |
+| `TOOL_UNSUPPORTED_FILE_TYPE` | Binaer-aehnliche Datei in Text-Tool | Textdatei oder anderes Tool verwenden |
+| `TOOL_CONFLICT` | Ziel/Add-Ziel existiert bereits | Overwrite/Move oder anderes Ziel nutzen |
+| `TOOL_UNKNOWN` | Tool-Name ist nicht registriert | Unterstuetztes Tool verwenden |
+| `TOOL_EXECUTION_ERROR` | Allgemeiner Tool/Runtime-Fehler-Fallback | `error.message` fuer Details pruefen |
 
 ### Felder-Referenz
 

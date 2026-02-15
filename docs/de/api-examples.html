@@ -221,10 +221,20 @@ else:
   &quot;result&quot;: null,
   &quot;error&quot;: {
     &quot;message&quot;: &quot;BLOCKED: Command not allowed in mode &#39;build&#39;: rm -rf /&quot;,
-    &quot;code&quot;: &quot;&quot;
+    &quot;code&quot;: &quot;TOOL_EXECUTION_ERROR&quot;
   },
   &quot;meta&quot;: { &quot;duration_ms&quot;: 3, &quot;ts&quot;: &quot;2026-02-15T12:00:01.000Z&quot; }
 }</code></pre>
+<h3 id="garantierte-vs-optionale-felder">Garantierte vs optionale Felder</h3>
+<p>Garantiert in erfolgreichen <code>--json</code>-Antworten:</p>
+<ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
+<p>Optional (nur wenn zutreffend vorhanden):</p>
+<ul><li><code>legacyModeMappedFrom</code> -- Nur vorhanden, wenn ein Legacy-Modus-Alias (<code>plan|build|unsafe</code>) auf ein Profil gemappt wurde.</li><li><code>error</code> und <code>code</code> -- In Top-Level-Fehlerantworten (<code>ok: false</code>) vorhanden.</li></ul>
+<p>Fuer jeden <code>toolCalls[]</code>-Record:</p>
+<ul><li>Garantiert: <code>tool</code>, <code>input</code>, <code>ok</code>, <code>result</code>, <code>error</code>, <code>meta</code></li><li>Optional innerhalb von <code>error</code>: <code>code</code> kann vom Tool kommen (Fallback auf <code>TOOL_EXECUTION_ERROR</code>).</li></ul>
+<h3 id="tool-fehlercodes">Tool-Fehlercodes</h3>
+<p>Hauefige Tool-Fehlercodes in normalisierten Tool-Call-Records:</p>
+<p>| Code | Bedeutung | Typische Loesung | |------|-----------|------------------| | <code>TOOL_INVALID_ARGS</code> | Fehlende/ungueltige Tool-Argumente | Tool-Input-Payload validieren | | <code>TOOL_NOT_FOUND</code> | Datei/Pfad-Ziel nicht gefunden | Zielpfad pruefen | | <code>TOOL_INVALID_PATTERN</code> | Ungueltiges Regex-Pattern | Regex-Syntax korrigieren | | <code>TOOL_UNSUPPORTED_FILE_TYPE</code> | Binaer-aehnliche Datei in Text-Tool | Textdatei oder anderes Tool verwenden | | <code>TOOL_CONFLICT</code> | Ziel/Add-Ziel existiert bereits | Overwrite/Move oder anderes Ziel nutzen | | <code>TOOL_UNKNOWN</code> | Tool-Name ist nicht registriert | Unterstuetztes Tool verwenden | | <code>TOOL_EXECUTION_ERROR</code> | Allgemeiner Tool/Runtime-Fehler-Fallback | <code>error.message</code> fuer Details pruefen |</p>
 <h3 id="felder-referenz">Felder-Referenz</h3>
 <ul><li><code>ok</code> (<code>boolean</code>) -- Ob die Anfrage erfolgreich abgeschlossen wurde</li><li><code>provider</code> (<code>string</code>) -- Verwendeter Provider</li><li><code>model</code> (<code>string</code>) -- Vollstaendige Modell-Kennung (<code>provider/model</code>)</li><li><code>profile</code> (<code>string</code>) -- Effektives Runtime-Profil (<code>safe|dev|framework</code>)</li><li><code>mode</code> (<code>string</code>) -- Aktiver Sicherheitsmodus</li><li><code>approvalMode</code> (<code>string</code>) -- Aktiver Freigabemodus</li><li><code>toolsMode</code> (<code>string</code>) -- Konfigurierter Tools-Modus</li><li><code>toolsEnabled</code> (<code>boolean</code>) -- Ob Tools tatsaechlich an das Modell gesendet wurden</li><li><code>toolsFallbackUsed</code> (<code>boolean</code>) -- Ob Auto-Modus auf ohne-Tools zurueckgefallen ist</li><li><code>attachments</code> (<code>object</code>) -- Angehaengte Dateien und Bilder</li><li><code>usage</code> (<code>object</code>) -- Aggregierte Usage fuer diesen Lauf (<code>turns</code>, <code>input_tokens</code>, <code>output_tokens</code>, <code>total_tokens</code>, ...)</li><li><code>message</code> (<code>string</code>) -- Finale Textantwort der KI</li><li><code>toolCalls</code> (<code>array</code>) -- Normalisierte Tool-Call-Records (<code>tool</code>, <code>input</code>, <code>ok</code>, <code>result</code>, <code>error</code>, <code>meta</code>)</li><li><code>timingMs</code> (<code>number</code>) -- Gesamte Ausfuehrungszeit in Millisekunden</li><li><code>error</code> (<code>string</code>) -- Fehlermeldung (nur wenn <code>ok</code> false ist)</li><li><code>code</code> (<code>string</code>) -- Fehlercode (nur wenn <code>ok</code> false ist)</li></ul>
 <h2 id="exit-codes">Exit-Codes</h2>
@@ -252,6 +262,8 @@ else:
 <a class="sub-item" href="#erfolgs-antwort">Erfolgs-Antwort</a>
 <a class="sub-item" href="#fehler-antwort">Fehler-Antwort</a>
 <a class="sub-item" href="#blockierter-befehl-im-tool-call">Blockierter Befehl im Tool-Call</a>
+<a class="sub-item" href="#garantierte-vs-optionale-felder">Garantierte vs optionale Felder</a>
+<a class="sub-item" href="#tool-fehlercodes">Tool-Fehlercodes</a>
 <a class="sub-item" href="#felder-referenz">Felder-Referenz</a>
 <a href="#exit-codes">Exit-Codes</a></nav>
       </aside>

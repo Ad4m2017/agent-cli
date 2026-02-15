@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.8] - 2026-02-15
+
+### Added
+- Added deterministic mock-provider end-to-end smoke tests in `test/agent-e2e.test.js` for `read_file`, `search_content`, `apply_patch`, and `run_command` tool flows.
+- Added explicit CI execution of the e2e smoke suite in `.github/workflows/ci.yml`.
+- Extended API examples/docs with a clearer JSON contract section (guaranteed vs optional fields) and documented tool error codes.
+
+### Changed
+- Updated API examples to use `TOOL_EXECUTION_ERROR` for blocked tool-call examples.
+- Bumped versions from `1.3.7` to `1.3.8` in `agent.js`, `agent-connect.js`, and `package.json`.
+- Updated README version labels in `README.md` and `README.de.md`.
+
 ## [1.3.7] - 2026-02-15
 
 ### Added

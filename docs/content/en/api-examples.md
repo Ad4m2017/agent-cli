@@ -249,11 +249,54 @@ else:
   "result": null,
   "error": {
     "message": "BLOCKED: Command not allowed in mode 'build': rm -rf /",
-    "code": ""
+    "code": "TOOL_EXECUTION_ERROR"
   },
   "meta": { "duration_ms": 3, "ts": "2026-02-15T12:00:01.000Z" }
 }
 ```
+
+### Guaranteed vs Optional Fields
+
+Guaranteed in successful `--json` responses:
+
+- `ok`
+- `provider`
+- `model`
+- `profile`
+- `mode`
+- `approvalMode`
+- `toolsMode`
+- `toolsEnabled`
+- `toolsFallbackUsed`
+- `attachments`
+- `usage`
+- `message`
+- `toolCalls`
+- `timingMs`
+
+Optional (present only when applicable):
+
+- `legacyModeMappedFrom` -- Only present when a legacy mode alias (`plan|build|unsafe`) was mapped to a profile.
+- `error` and `code` -- Present on top-level failure responses (`ok: false`).
+
+For each `toolCalls[]` record:
+
+- Guaranteed: `tool`, `input`, `ok`, `result`, `error`, `meta`
+- Optional inside `error`: `code` may come from the tool (falls back to `TOOL_EXECUTION_ERROR`).
+
+### Tool Error Codes
+
+Common tool error codes in normalized tool-call records:
+
+| Code | Meaning | Typical Fix |
+|------|---------|-------------|
+| `TOOL_INVALID_ARGS` | Missing/invalid tool arguments | Validate tool input payload |
+| `TOOL_NOT_FOUND` | File/path target missing | Check the target path exists |
+| `TOOL_INVALID_PATTERN` | Invalid regex pattern | Fix regex syntax |
+| `TOOL_UNSUPPORTED_FILE_TYPE` | Binary-like file used in text tool | Use a text file or different tool |
+| `TOOL_CONFLICT` | Destination/add target already exists | Use overwrite/move or different target |
+| `TOOL_UNKNOWN` | Tool name is not registered | Use a supported tool |
+| `TOOL_EXECUTION_ERROR` | Generic tool/runtime failure fallback | Inspect tool `error.message` details |
 
 ### Fields Reference
 

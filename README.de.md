@@ -78,7 +78,7 @@ node agent-connect.js
 
 Der interaktive Wizard laesst dich einen Provider waehlen, deinen API-Key eingeben und Defaults setzen. Im TTY-Terminal: Pfeiltasten + Enter zur Navigation.
 
-Wizard-Highlights in `v1.3.7`:
+Wizard-Highlights in `v1.3.8`:
 - Provider-Statuslabels (`installed`, `installed, default`, `not configured`)
 - Schnellaktion `Set default provider/model only` (ohne komplettes Re-Setup)
 - Optionales Model-Refresh aus `/models` mit Fallback auf `models.dev`
@@ -345,7 +345,7 @@ Das englische README ist verfuegbar unter [README.md](README.md).
 
 ## Version
 
-Aktuelle Version: `1.3.7` -- siehe [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: `1.3.8` -- siehe [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 
