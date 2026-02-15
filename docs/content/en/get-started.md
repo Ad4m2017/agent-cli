@@ -12,13 +12,13 @@ A zero-dependency, multi-provider AI agent for the terminal. No frameworks, no s
 
 ## How It Works
 
-agent-cli sends your prompt to an AI model via the OpenAI-compatible chat completions API. The model can respond with plain text or request tool calls. Currently, the agent supports one tool: `run_command`, which executes shell commands.
+agent-cli sends your prompt to an AI model via the OpenAI-compatible chat completions API. The model can respond with plain text or request tool calls. The agent supports specialized tools for files/search/patches plus `run_command`.
 
 The execution follows an agentic loop:
 
 1. You send a prompt
 2. The AI model processes the prompt
-3. If the model needs to run a command, it issues a `run_command` tool call
+3. If the model needs tool execution, it issues a tool call (for example `read_file`, `search_content`, `apply_patch`, or `run_command`)
 4. The agent checks the command against security policies
 5. If allowed, the agent executes the command and sends the output back
 6. The model processes the output and either issues more tool calls or responds with text
@@ -111,7 +111,7 @@ node agent.js -m "Explain this error" --model groq/llama-3.3-70b-versatile
 
 ### Tool Calling
 
-The agent provides the AI model with a `run_command` tool definition. When the model decides a shell command would help answer your question, it returns a tool call instead of text. The agent executes the command using `execFile` (not `exec` -- this prevents shell injection), sends the output back, and the model incorporates the result.
+The agent provides the AI model with specialized tools (`read_file`, `list_files`, `search_content`, `write_file`, `delete_file`, `move_file`, `mkdir`, `apply_patch`) plus `run_command`. When the model decides a tool would help answer your question, it returns a tool call instead of text. The agent executes the tool, sends the output back, and the model incorporates the result.
 
 This creates an agentic loop where the AI can:
 
@@ -250,7 +250,8 @@ Options:
   --config <path>        Path to agent.json (default: ./agent.json)
   --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)
   --json
-  --mode <plan|build|unsafe>
+  --profile <safe|dev|framework>
+  --mode <plan|build|unsafe>   # legacy alias
   --approval <ask|auto|never>
   --tools <auto|on|off>
   --no-tools

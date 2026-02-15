@@ -75,7 +75,8 @@ This file controls runtime behavior and security policy. It is created with sens
 
 - `defaultProvider` (`string`) -- Provider identifier (e.g., `"openai"`, `"copilot"`, `"groq"`). Used when `--model` does not include a provider prefix.
 - `defaultModel` (`string`) -- Full model identifier in `provider/model` format (e.g., `"openai/gpt-4.1-mini"`). Used when `--model` is not passed.
-- `defaultMode` (`string`: `"plan"`, `"build"`, `"unsafe"`) -- Security mode applied when `--mode` is not passed. Default: `"build"`.
+- `profile` (`string`: `"safe"`, `"dev"`, `"framework"`) -- Runtime profile. Default: `"dev"`.
+- `defaultMode` (`string`: `"plan"`, `"build"`, `"unsafe"`) -- Legacy mode alias (maps to profiles). Kept for backward compatibility.
 - `defaultApprovalMode` (`string`: `"ask"`, `"auto"`, `"never"`) -- Approval mode applied when `--approval` is not passed. Default: `"ask"`.
 - `defaultToolsMode` (`string`: `"auto"`, `"on"`, `"off"`) -- Tools mode applied when `--tools` is not passed. Default: `"auto"`.
 - `commandTimeoutMs` (`number`) -- Timeout for tool command execution (`run_command`) in milliseconds. Default: `10000`.
@@ -303,7 +304,7 @@ agent-cli now uses stable process exit codes for automation:
 
 Configuration values are resolved in this order (first wins):
 
-1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`, `--stats`)
+1. CLI flags (`--model`, `--profile`, `--mode` [legacy], `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`, `--stats`)
 2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` runtime defaults
 4. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)

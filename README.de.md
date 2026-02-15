@@ -78,7 +78,7 @@ node agent-connect.js
 
 Der interaktive Wizard laesst dich einen Provider waehlen, deinen API-Key eingeben und Defaults setzen. Im TTY-Terminal: Pfeiltasten + Enter zur Navigation.
 
-Wizard-Highlights in `v1.3.4`:
+Wizard-Highlights in `v1.3.5`:
 - Provider-Statuslabels (`installed`, `installed, default`, `not configured`)
 - Schnellaktion `Set default provider/model only` (ohne komplettes Re-Setup)
 - Optionales Model-Refresh aus `/models` mit Fallback auf `models.dev`
@@ -105,25 +105,28 @@ node agent.js -m "Welche Dateien sind in diesem Verzeichnis?"
 node agent.js -m "Fuehre die Tests aus und fasse die Ergebnisse zusammen" --approval auto
 ```
 
-Der Agent fuehrt `run_command` Tool-Calls automatisch aus, wenn `--approval auto` gesetzt ist.
+Der Agent fuehrt Tool-Calls automatisch aus, wenn `--approval auto` gesetzt ist.
 
 ## Konzepte
 
 ### Tool-Calling
 
-Der Agent stellt dem KI-Modell ein `run_command`-Tool zur Verfuegung. Wenn das Modell entscheidet, dass ein Shell-Befehl bei der Beantwortung helfen wuerde, loest es einen Tool-Call aus. Der Agent fuehrt den Befehl aus, sendet die Ausgabe zurueck an das Modell, und das Modell verarbeitet das Ergebnis in seiner Antwort.
+Der Agent stellt dem KI-Modell spezialisierte Tools bereit (`read_file`, `list_files`, `search_content`, `write_file`, `delete_file`, `move_file`, `mkdir`, `apply_patch`) plus `run_command`. Wenn das Modell entscheidet, dass ein Tool bei der Beantwortung helfen wuerde, loest es einen Tool-Call aus. Der Agent fuehrt das Tool aus, sendet die Ausgabe zurueck an das Modell, und das Modell verarbeitet das Ergebnis in seiner Antwort.
 
 Das erzeugt eine **agentische Schleife**: Die KI kann Dateien inspizieren, Tests ausfuehren, Git-Status pruefen und ueber die Ausgabe nachdenken -- alles innerhalb eines einzigen Prompts.
 
-### Sicherheitsmodi
+### Runtime-Profile
 
-Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine Sicherheitsrichtlinie in `agent.json` geprueft. Es gibt drei Modi:
+Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine Sicherheitsrichtlinie in `agent.json` geprueft. Profile sind jetzt:
 
-| Modus | Zweck | Erlaubt | Blockiert |
-|-------|-------|---------|-----------|
-| `plan` | Nur-Lesen / Erkundung | `ls`, `pwd`, `git status`, `git log`, `node -v` | `rm`, `sudo`, `docker`, `npm install`, `git push` |
-| `build` | Normale Entwicklung | `git`, `node`, `npm`, `python`, `docker`, `make` | `rm`, `sudo`, `shutdown`, `mkfs`, `chown` |
-| `unsafe` | Breiter Befehlsumfang | Alles (`*`) | `rm -rf /`, `mkfs`, `shutdown`, `reboot`, `poweroff` |
+| Profil | Zweck | Legacy-Modus-Alias |
+|--------|-------|--------------------|
+| `safe` | Konservativer Befehlsumfang | `plan` |
+| `dev` | Standard fuer Entwicklung | `build` |
+| `framework` | Breiter Befehlsumfang | `unsafe` |
+
+Du kannst ein Profil mit `--profile` oder `runtime.profile` in `agent.json` waehlen.
+`--mode` bleibt als rueckwaertskompatibler Alias erhalten.
 
 Unabhaengig vom Modus blockiert eine `denyCritical`-Liste immer katastrophale Befehle wie `rm -rf /`, `mkfs` und das Pipen von curl/wget in eine Shell.
 
@@ -176,7 +179,8 @@ Optionen:
   --config <pfad>        Pfad zu agent.json (Standard: ./agent.json)
   --auth-config <pfad>   Pfad zu agent.auth.json (Standard: ./agent.auth.json)
   --json                 Strukturiertes JSON mit Tool-Call-Details ausgeben
-  --mode <name>          Sicherheitsmodus: plan, build, unsafe
+  --profile <name>       Runtime-Profil: safe, dev, framework
+  --mode <name>          Sicherheitsmodus (Legacy-Alias): plan, build, unsafe
   --approval <name>      Freigabemodus: ask, auto, never
   --tools <name>         Tools-Modus: auto, on, off
   --no-tools             Alias fuer --tools off
@@ -341,7 +345,7 @@ Das englische README ist verfuegbar unter [README.md](README.md).
 
 ## Version
 
-Aktuelle Version: `1.3.4` -- siehe [CHANGELOG.md](CHANGELOG.md).
+Aktuelle Version: `1.3.5` -- siehe [CHANGELOG.md](CHANGELOG.md).
 
 ## Lizenz
 

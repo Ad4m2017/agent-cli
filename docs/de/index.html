@@ -36,9 +36,9 @@
 <h2 id="warum-agent-cli">Warum agent-cli?</h2>
 <ul><li><strong>Zero Dependencies</strong> -- kein <code>node_modules</code>, kein Supply-Chain-Risiko</li><li><strong>11 Provider</strong> -- Anbieter wechseln mit einer Config-Aenderung</li><li><strong>Security-first</strong> -- konfigurierbare Befehlsrichtlinien verhindern destruktive Operationen</li><li><strong>Laeuft ueberall</strong> -- SSH, Container, CI, Remote-Server</li><li><strong>Lokale Config</strong> -- Credentials bleiben auf deinem Rechner</li></ul>
 <h2 id="wie-es-funktioniert">Wie es funktioniert</h2>
-<p>agent-cli sendet deinen Prompt an ein KI-Modell ueber die OpenAI-kompatible Chat-Completions-API. Das Modell kann mit reinem Text antworten oder Tool-Calls anfordern. Aktuell unterstuetzt der Agent ein Tool: <code>run_command</code>, das Shell-Befehle ausfuehrt.</p>
+<p>agent-cli sendet deinen Prompt an ein KI-Modell ueber die OpenAI-kompatible Chat-Completions-API. Das Modell kann mit reinem Text antworten oder Tool-Calls anfordern. Der Agent unterstuetzt spezialisierte Tools fuer Dateien/Suche/Patches plus <code>run_command</code>.</p>
 <p>Die Ausfuehrung folgt einer agentischen Schleife:</p>
-<ol><li>Du sendest einen Prompt</li><li>Das KI-Modell verarbeitet den Prompt</li><li>Wenn das Modell einen Befehl ausfuehren muss, loest es einen <code>run_command</code> Tool-Call aus</li><li>Der Agent prueft den Befehl gegen die Sicherheitsrichtlinien</li><li>Falls erlaubt, fuehrt der Agent den Befehl aus und sendet die Ausgabe zurueck</li><li>Das Modell verarbeitet die Ausgabe und loest weitere Tool-Calls aus oder antwortet mit Text</li><li>Die Schleife laeuft fuer bis zu 5 Runden</li></ol>
+<ol><li>Du sendest einen Prompt</li><li>Das KI-Modell verarbeitet den Prompt</li><li>Wenn das Modell Tool-Ausfuehrung braucht, loest es einen Tool-Call aus (z.B. <code>read_file</code>, <code>search_content</code>, <code>apply_patch</code> oder <code>run_command</code>)</li><li>Der Agent prueft den Befehl gegen die Sicherheitsrichtlinien</li><li>Falls erlaubt, fuehrt der Agent den Befehl aus und sendet die Ausgabe zurueck</li><li>Das Modell verarbeitet die Ausgabe und loest weitere Tool-Calls aus oder antwortet mit Text</li><li>Die Schleife laeuft fuer bis zu 5 Runden</li></ol>
 <p>Das bedeutet: Die KI kann Dateien inspizieren, Tests ausfuehren, Git-History pruefen und ueber Ergebnisse nachdenken -- alles innerhalb eines einzigen Prompts.</p>
 <h2 id="voraussetzungen">Voraussetzungen</h2>
 <ul><li>Node.js 18+ (20+ empfohlen)</li><li>Internetzugang fuer Provider-APIs</li><li>Kein <code>npm install</code> erforderlich</li></ul>
@@ -79,7 +79,7 @@ node agent-connect.js --provider lmstudio</code></pre>
 node agent.js -m &quot;Erklaere diesen Fehler&quot; --model groq/llama-3.3-70b-versatile</code></pre>
 <h2 id="konzepte">Konzepte</h2>
 <h3 id="tool-calling">Tool-Calling</h3>
-<p>Der Agent stellt dem KI-Modell eine <code>run_command</code>-Tool-Definition bereit. Wenn das Modell entscheidet, dass ein Shell-Befehl bei der Beantwortung hilft, gibt es einen Tool-Call zurueck statt Text. Der Agent fuehrt den Befehl mit <code>execFile</code> aus (nicht <code>exec</code> -- das verhindert Shell-Injection), sendet die Ausgabe zurueck, und das Modell verarbeitet das Ergebnis.</p>
+<p>Der Agent stellt dem KI-Modell spezialisierte Tools bereit (<code>read_file</code>, <code>list_files</code>, <code>search_content</code>, <code>write_file</code>, <code>delete_file</code>, <code>move_file</code>, <code>mkdir</code>, <code>apply_patch</code>) plus <code>run_command</code>. Wenn das Modell entscheidet, dass ein Tool bei der Beantwortung hilft, gibt es einen Tool-Call zurueck statt Text. Der Agent fuehrt das Tool aus, sendet die Ausgabe zurueck, und das Modell verarbeitet das Ergebnis.</p>
 <p>Das erzeugt eine agentische Schleife, in der die KI:</p>
 <ul><li>Dateien auflisten und lesen kann</li><li>Tests und Linter ausfuehren kann</li><li>Git-Status und History pruefen kann</li><li>Build-Befehle ausfuehren kann</li><li>Laufende Prozesse inspizieren kann</li></ul>
 <p>Die Schleife laeuft fuer bis zu 5 Runden, bevor der Agent eine finale Textantwort erzwingt.</p>
@@ -136,7 +136,8 @@ Optionen:
   --config &lt;pfad&gt;        Pfad zu agent.json (Standard: ./agent.json)
   --auth-config &lt;pfad&gt;   Pfad zu agent.auth.json (Standard: ./agent.auth.json)
   --json
-  --mode &lt;plan|build|unsafe&gt;
+  --profile &lt;safe|dev|framework&gt;
+  --mode &lt;plan|build|unsafe&gt;   # Legacy-Alias
   --approval &lt;ask|auto|never&gt;
   --tools &lt;auto|on|off&gt;
   --no-tools

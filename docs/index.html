@@ -36,9 +36,9 @@
 <h2 id="why-agent-cli">Why agent-cli?</h2>
 <ul><li><strong>Zero dependencies</strong> -- no <code>node_modules</code>, no supply-chain risk</li><li><strong>11 providers</strong> -- switch providers with one config change</li><li><strong>Security-first</strong> -- configurable command policies prevent destructive operations</li><li><strong>Works everywhere</strong> -- SSH, containers, CI, remote servers</li><li><strong>Local-only</strong> -- credentials stay on your machine</li></ul>
 <h2 id="how-it-works">How It Works</h2>
-<p>agent-cli sends your prompt to an AI model via the OpenAI-compatible chat completions API. The model can respond with plain text or request tool calls. Currently, the agent supports one tool: <code>run_command</code>, which executes shell commands.</p>
+<p>agent-cli sends your prompt to an AI model via the OpenAI-compatible chat completions API. The model can respond with plain text or request tool calls. The agent supports specialized tools for files/search/patches plus <code>run_command</code>.</p>
 <p>The execution follows an agentic loop:</p>
-<ol><li>You send a prompt</li><li>The AI model processes the prompt</li><li>If the model needs to run a command, it issues a <code>run_command</code> tool call</li><li>The agent checks the command against security policies</li><li>If allowed, the agent executes the command and sends the output back</li><li>The model processes the output and either issues more tool calls or responds with text</li><li>The loop continues for up to 5 turns</li></ol>
+<ol><li>You send a prompt</li><li>The AI model processes the prompt</li><li>If the model needs tool execution, it issues a tool call (for example <code>read_file</code>, <code>search_content</code>, <code>apply_patch</code>, or <code>run_command</code>)</li><li>The agent checks the command against security policies</li><li>If allowed, the agent executes the command and sends the output back</li><li>The model processes the output and either issues more tool calls or responds with text</li><li>The loop continues for up to 5 turns</li></ol>
 <p>This means the AI can inspect files, run tests, check git history, and reason about results -- all within a single prompt.</p>
 <h2 id="requirements">Requirements</h2>
 <ul><li>Node.js 18+ (20+ recommended)</li><li>Internet access for provider APIs</li><li>No <code>npm install</code> required</li></ul>
@@ -79,7 +79,7 @@ node agent-connect.js --provider lmstudio</code></pre>
 node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versatile</code></pre>
 <h2 id="concepts">Concepts</h2>
 <h3 id="tool-calling">Tool Calling</h3>
-<p>The agent provides the AI model with a <code>run_command</code> tool definition. When the model decides a shell command would help answer your question, it returns a tool call instead of text. The agent executes the command using <code>execFile</code> (not <code>exec</code> -- this prevents shell injection), sends the output back, and the model incorporates the result.</p>
+<p>The agent provides the AI model with specialized tools (<code>read_file</code>, <code>list_files</code>, <code>search_content</code>, <code>write_file</code>, <code>delete_file</code>, <code>move_file</code>, <code>mkdir</code>, <code>apply_patch</code>) plus <code>run_command</code>. When the model decides a tool would help answer your question, it returns a tool call instead of text. The agent executes the tool, sends the output back, and the model incorporates the result.</p>
 <p>This creates an agentic loop where the AI can:</p>
 <ul><li>List and read files</li><li>Run tests and linters</li><li>Check git status and history</li><li>Execute build commands</li><li>Inspect running processes</li></ul>
 <p>The loop runs for up to 5 turns before the agent forces a final text response.</p>
@@ -136,7 +136,8 @@ Options:
   --config &lt;path&gt;        Path to agent.json (default: ./agent.json)
   --auth-config &lt;path&gt;   Path to agent.auth.json (default: ./agent.auth.json)
   --json
-  --mode &lt;plan|build|unsafe&gt;
+  --profile &lt;safe|dev|framework&gt;
+  --mode &lt;plan|build|unsafe&gt;   # legacy alias
   --approval &lt;ask|auto|never&gt;
   --tools &lt;auto|on|off&gt;
   --no-tools

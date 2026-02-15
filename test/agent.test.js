@@ -35,6 +35,7 @@ const {
   matchesPolicyRule,
   evaluateCommandPolicy,
   getEffectiveMode,
+  getEffectiveProfile,
   getEffectiveApprovalMode,
   getEffectiveToolsMode,
   isToolUnsupportedError,
@@ -50,6 +51,15 @@ const {
   resolveAttachmentLimits,
   resolveSystemPrompt,
   resolveUsageStatsConfig,
+  wildcardToRegExp,
+  readFileTool,
+  listFilesTool,
+  searchContentTool,
+  writeFileTool,
+  deleteFileTool,
+  moveFileTool,
+  mkdirTool,
+  applyPatchTool,
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
   selectTopModels,
@@ -127,6 +137,7 @@ describe("parseCliArgs", () => {
     assert.equal(opts.maxImageBytes, null);
     assert.equal(opts.maxFiles, null);
     assert.equal(opts.maxImages, null);
+    assert.equal(opts.profile, "");
     assert.equal(opts.mode, "");
     assert.equal(opts.approval, "");
     assert.equal(opts.tools, "");
@@ -208,6 +219,11 @@ describe("parseCliArgs", () => {
     assert.equal(opts.mode, "plan");
     assert.equal(opts.approval, "auto");
     assert.equal(opts.tools, "on");
+  });
+
+  it("parses --profile", () => {
+    const opts = parseCliArgs(["--profile", "framework"]);
+    assert.equal(opts.profile, "framework");
   });
 
   it("parses --no-tools as tools=off", () => {
@@ -532,6 +548,34 @@ describe("getEffectiveMode", () => {
 
   it("falls back to build as final default", () => {
     assert.equal(getEffectiveMode({ unsafe: false, mode: "" }, null), "build");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getEffectiveProfile
+// ---------------------------------------------------------------------------
+describe("getEffectiveProfile", () => {
+  it("returns framework when opts.unsafe is true", () => {
+    assert.equal(getEffectiveProfile({ unsafe: true, profile: "safe", mode: "plan" }, null), "framework");
+  });
+
+  it("uses opts.profile when provided", () => {
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "dev", mode: "plan" }, null), "dev");
+  });
+
+  it("maps legacy opts.mode values", () => {
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "plan" }, null), "safe");
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "build" }, null), "dev");
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "unsafe" }, null), "framework");
+  });
+
+  it("falls back to config runtime.profile", () => {
+    const cfg = { runtime: { profile: "framework" } };
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, cfg), "framework");
+  });
+
+  it("defaults to dev", () => {
+    assert.equal(getEffectiveProfile({ unsafe: false, profile: "", mode: "" }, null), "dev");
   });
 });
 
@@ -1619,6 +1663,62 @@ describe("formatUsageStatsText", () => {
   });
 });
 
+describe("specialized file tools", () => {
+  it("wildcardToRegExp matches glob-like patterns", () => {
+    const rx = wildcardToRegExp("src/*.js");
+    assert.equal(rx.test("src/main.js"), true);
+    assert.equal(rx.test("src/main.ts"), false);
+  });
+
+  it("read/write/move/delete/mkdir/apply_patch/search/list work together", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agent-tools-"));
+    const cwdBefore = process.cwd();
+    process.chdir(tmp);
+    try {
+      const mk = mkdirTool({ path: "project/src", recursive: true });
+      assert.equal(mk.ok, true);
+
+      const w = writeFileTool({ path: "project/src/a.txt", content: "hello\nworld\n" });
+      assert.equal(w.ok, true);
+
+      const r = readFileTool({ path: "project/src/a.txt", offset: 1, limit: 2 });
+      assert.equal(r.ok, true);
+      assert.match(r.content, /1: hello/);
+
+      const ls = listFilesTool({ path: "project", include: "src/*.txt" });
+      assert.equal(ls.ok, true);
+      assert.deepEqual(ls.files, ["src/a.txt"]);
+
+      const s = searchContentTool({ path: "project", pattern: "world", include: "src/*.txt" });
+      assert.equal(s.ok, true);
+      assert.equal(s.matches.length, 1);
+      assert.equal(s.matches[0].line, 2);
+
+      const mv = moveFileTool({ path: "project/src/a.txt", to: "project/src/b.txt" });
+      assert.equal(mv.ok, true);
+
+      const patch = applyPatchTool({
+        operations: [
+          { op: "update", path: "project/src/b.txt", content: "patched\n" },
+          { op: "add", path: "project/src/c.txt", content: "new\n" },
+        ],
+      });
+      assert.equal(patch.ok, true);
+
+      const r2 = readFileTool({ path: "project/src/b.txt" });
+      assert.equal(r2.ok, true);
+      assert.match(r2.content, /patched/);
+
+      const del = deleteFileTool({ path: "project/src/c.txt" });
+      assert.equal(del.ok, true);
+      assert.equal(fs.existsSync(path.join(tmp, "project/src/c.txt")), false);
+    } finally {
+      process.chdir(cwdBefore);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // applyEnvOverrides
 // ---------------------------------------------------------------------------
@@ -1628,6 +1728,7 @@ describe("applyEnvOverrides", () => {
     const saved = Object.assign({}, original);
     // Ensure env vars are clean
     delete process.env.AGENT_MODEL;
+    delete process.env.AGENT_PROFILE;
     delete process.env.AGENT_MODE;
     delete process.env.AGENT_APPROVAL;
     applyEnvOverrides(original);
@@ -1667,6 +1768,18 @@ describe("applyEnvOverrides", () => {
     } finally {
       if (originalMode === undefined) delete process.env.AGENT_MODE;
       else process.env.AGENT_MODE = originalMode;
+    }
+  });
+
+  it("applies AGENT_PROFILE when opts.profile is empty", () => {
+    const originalProfile = process.env.AGENT_PROFILE;
+    try {
+      process.env.AGENT_PROFILE = "framework";
+      const result = applyEnvOverrides({ profile: "" });
+      assert.equal(result.profile, "framework");
+    } finally {
+      if (originalProfile === undefined) delete process.env.AGENT_PROFILE;
+      else process.env.AGENT_PROFILE = originalProfile;
     }
   });
 
@@ -1816,6 +1929,7 @@ describe("applyEnvOverrides", () => {
 
   it("returns unchanged opts when no env vars are set", () => {
     const originalModel = process.env.AGENT_MODEL;
+    const originalProfile = process.env.AGENT_PROFILE;
     const originalMode = process.env.AGENT_MODE;
     const originalApproval = process.env.AGENT_APPROVAL;
     const originalTimeout = process.env.AGENT_COMMAND_TIMEOUT;
@@ -1827,6 +1941,7 @@ describe("applyEnvOverrides", () => {
     const originalMaxImages = process.env.AGENT_MAX_IMAGES;
     try {
       delete process.env.AGENT_MODEL;
+      delete process.env.AGENT_PROFILE;
       delete process.env.AGENT_MODE;
       delete process.env.AGENT_APPROVAL;
       delete process.env.AGENT_COMMAND_TIMEOUT;
@@ -1836,14 +1951,17 @@ describe("applyEnvOverrides", () => {
       delete process.env.AGENT_MAX_IMAGE_BYTES;
       delete process.env.AGENT_MAX_FILES;
       delete process.env.AGENT_MAX_IMAGES;
-      const result = applyEnvOverrides({ model: "", mode: "", approval: "", message: "test" });
+      const result = applyEnvOverrides({ model: "", profile: "", mode: "", approval: "", message: "test" });
       assert.equal(result.model, "");
+      assert.equal(result.profile, "");
       assert.equal(result.mode, "");
       assert.equal(result.approval, "");
       assert.equal(result.message, "test");
     } finally {
       if (originalModel === undefined) delete process.env.AGENT_MODEL;
       else process.env.AGENT_MODEL = originalModel;
+      if (originalProfile === undefined) delete process.env.AGENT_PROFILE;
+      else process.env.AGENT_PROFILE = originalProfile;
       if (originalMode === undefined) delete process.env.AGENT_MODE;
       else process.env.AGENT_MODE = originalMode;
       if (originalApproval === undefined) delete process.env.AGENT_APPROVAL;

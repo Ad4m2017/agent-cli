@@ -75,7 +75,8 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 
 - `defaultProvider` (`string`) -- Provider-Kennung (z.B. `"openai"`, `"copilot"`, `"groq"`). Wird verwendet wenn `--model` keinen Provider-Prefix hat.
 - `defaultModel` (`string`) -- Vollstaendige Modell-Kennung im Format `provider/model` (z.B. `"openai/gpt-4.1-mini"`). Wird verwendet wenn `--model` nicht uebergeben wird.
-- `defaultMode` (`string`: `"plan"`, `"build"`, `"unsafe"`) -- Sicherheitsmodus wenn `--mode` nicht uebergeben wird. Standard: `"build"`.
+- `profile` (`string`: `"safe"`, `"dev"`, `"framework"`) -- Runtime-Profil. Standard: `"dev"`.
+- `defaultMode` (`string`: `"plan"`, `"build"`, `"unsafe"`) -- Legacy-Modus-Alias (wird auf Profile gemappt). Nur fuer Rueckwaertskompatibilitaet.
 - `defaultApprovalMode` (`string`: `"ask"`, `"auto"`, `"never"`) -- Freigabemodus wenn `--approval` nicht uebergeben wird. Standard: `"ask"`.
 - `defaultToolsMode` (`string`: `"auto"`, `"on"`, `"off"`) -- Tools-Modus wenn `--tools` nicht uebergeben wird. Standard: `"auto"`.
 - `commandTimeoutMs` (`number`) -- Timeout fuer Tool-Command-Ausfuehrung (`run_command`) in Millisekunden. Standard: `10000`.
@@ -303,7 +304,7 @@ agent-cli nutzt jetzt stabile Prozess-Exit-Codes fuer Automation:
 
 Konfigurationswerte werden in dieser Reihenfolge aufgeloest (erstes gewinnt):
 
-1. CLI-Flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`, `--stats`)
+1. CLI-Flags (`--model`, `--profile`, `--mode` [legacy], `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`, `--stats`)
 2. Umgebungsvariablen (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` Runtime-Defaults
 4. `agent.auth.json` Defaults (`defaultProvider`, `defaultModel`)

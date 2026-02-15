@@ -12,13 +12,13 @@ Ein Zero-Dependency, Multi-Provider KI-Agent fuer das Terminal. Keine Frameworks
 
 ## Wie es funktioniert
 
-agent-cli sendet deinen Prompt an ein KI-Modell ueber die OpenAI-kompatible Chat-Completions-API. Das Modell kann mit reinem Text antworten oder Tool-Calls anfordern. Aktuell unterstuetzt der Agent ein Tool: `run_command`, das Shell-Befehle ausfuehrt.
+agent-cli sendet deinen Prompt an ein KI-Modell ueber die OpenAI-kompatible Chat-Completions-API. Das Modell kann mit reinem Text antworten oder Tool-Calls anfordern. Der Agent unterstuetzt spezialisierte Tools fuer Dateien/Suche/Patches plus `run_command`.
 
 Die Ausfuehrung folgt einer agentischen Schleife:
 
 1. Du sendest einen Prompt
 2. Das KI-Modell verarbeitet den Prompt
-3. Wenn das Modell einen Befehl ausfuehren muss, loest es einen `run_command` Tool-Call aus
+3. Wenn das Modell Tool-Ausfuehrung braucht, loest es einen Tool-Call aus (z.B. `read_file`, `search_content`, `apply_patch` oder `run_command`)
 4. Der Agent prueft den Befehl gegen die Sicherheitsrichtlinien
 5. Falls erlaubt, fuehrt der Agent den Befehl aus und sendet die Ausgabe zurueck
 6. Das Modell verarbeitet die Ausgabe und loest weitere Tool-Calls aus oder antwortet mit Text
@@ -111,7 +111,7 @@ node agent.js -m "Erklaere diesen Fehler" --model groq/llama-3.3-70b-versatile
 
 ### Tool-Calling
 
-Der Agent stellt dem KI-Modell eine `run_command`-Tool-Definition bereit. Wenn das Modell entscheidet, dass ein Shell-Befehl bei der Beantwortung hilft, gibt es einen Tool-Call zurueck statt Text. Der Agent fuehrt den Befehl mit `execFile` aus (nicht `exec` -- das verhindert Shell-Injection), sendet die Ausgabe zurueck, und das Modell verarbeitet das Ergebnis.
+Der Agent stellt dem KI-Modell spezialisierte Tools bereit (`read_file`, `list_files`, `search_content`, `write_file`, `delete_file`, `move_file`, `mkdir`, `apply_patch`) plus `run_command`. Wenn das Modell entscheidet, dass ein Tool bei der Beantwortung hilft, gibt es einen Tool-Call zurueck statt Text. Der Agent fuehrt das Tool aus, sendet die Ausgabe zurueck, und das Modell verarbeitet das Ergebnis.
 
 Das erzeugt eine agentische Schleife, in der die KI:
 
@@ -250,7 +250,8 @@ Optionen:
   --config <pfad>        Pfad zu agent.json (Standard: ./agent.json)
   --auth-config <pfad>   Pfad zu agent.auth.json (Standard: ./agent.auth.json)
   --json
-  --mode <plan|build|unsafe>
+  --profile <safe|dev|framework>
+  --mode <plan|build|unsafe>   # Legacy-Alias
   --approval <ask|auto|never>
   --tools <auto|on|off>
   --no-tools

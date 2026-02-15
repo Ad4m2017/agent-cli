@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.5] - 2026-02-15
+
+### Added
+- Added specialized built-in tools in `agent.js`: `read_file`, `list_files`, `search_content`, `write_file`, `delete_file`, `move_file`, `mkdir`, and `apply_patch`.
+- Added runtime profiles via `--profile` and config `runtime.profile`: `safe`, `dev`, `framework`.
+
+### Changed
+- Kept `--mode` (`plan|build|unsafe`) as a legacy alias mapped to profiles for backward compatibility.
+- JSON output now includes `profile` (effective runtime profile).
+- Bumped versions from `1.3.4` to `1.3.5` in `agent.js`, `agent-connect.js`, and `package.json`.
+- Updated README and docs to describe profile-based runtime selection and the expanded toolset.
+
 ## [1.3.4] - 2026-02-15
 
 ### Changed

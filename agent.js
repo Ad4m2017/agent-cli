@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.4";
+const AGENT_VERSION = "1.3.5";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -219,6 +219,7 @@ function parseCliArgs(argv) {
     maxImageBytes: null,
     maxFiles: null,
     maxImages: null,
+    profile: "",
     mode: "",
     approval: "",
     tools: "",
@@ -345,6 +346,12 @@ function parseCliArgs(argv) {
       continue;
     }
 
+    if (a === "--profile") {
+      opts.profile = argv[i + 1] || "";
+      i += 1;
+      continue;
+    }
+
     if (a === "--approval") {
       opts.approval = argv[i + 1] || "";
       i += 1;
@@ -433,6 +440,7 @@ function printHelp() {
     "  --max-image-bytes <n>  Max bytes per --image (integer >= 0, 0 = unlimited)",
     "  --max-files <n>        Max number of --file attachments (integer >= 0, 0 = unlimited)",
     "  --max-images <n>       Max number of --image attachments (integer >= 0, 0 = unlimited)",
+    "  --profile <name>       Runtime profile (safe/dev/framework)",
     "  --mode <name>          Security mode (plan/build/unsafe)",
     "  --approval <name>      Approval mode (ask/auto/never)",
     "  --tools <name>         Tools mode (auto/on/off)",
@@ -522,9 +530,10 @@ function appendErrorLog(enabled, logFile, err) {
 function defaultAgentConfig() {
   return {
     version: 1,
-  runtime: {
+    runtime: {
       defaultProvider: "",
       defaultModel: "",
+      profile: "dev",
       defaultMode: "build",
       defaultApprovalMode: "ask",
       defaultToolsMode: "auto",
@@ -1416,6 +1425,282 @@ function collectAttachments(opts, limits) {
   return { files, images };
 }
 
+function wildcardToRegExp(pattern) {
+  const src = String(pattern == null ? "*" : pattern);
+  const escaped = src.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  const withWildcards = escaped.replace(/\*/g, ".*").replace(/\?/g, ".");
+  return new RegExp(`^${withWildcards}$`);
+}
+
+function isTextFilePath(filePath) {
+  const ext = path.extname(String(filePath || "")).toLowerCase();
+  const binaryLike = [
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".ico", ".pdf", ".zip", ".gz", ".tar", ".7z",
+    ".mp3", ".wav", ".mp4", ".mov", ".avi", ".woff", ".woff2", ".ttf", ".otf", ".exe", ".dll", ".so",
+    ".class", ".jar", ".bin",
+  ];
+  return binaryLike.indexOf(ext) === -1;
+}
+
+function readUtf8TextFile(filePath) {
+  if (!isTextFilePath(filePath)) {
+    const e = new Error(`Binary-like file extension is unsupported for text operations: ${filePath}`);
+    e.code = ERROR_CODES.ATTACHMENT_TYPE_UNSUPPORTED;
+    throw e;
+  }
+  return fs.readFileSync(filePath, "utf8");
+}
+
+function listFilesRecursive(baseDir, includeHidden) {
+  const out = [];
+  const stack = [baseDir];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const name = entry.name;
+      if (!includeHidden && name.startsWith(".")) continue;
+      const full = path.join(dir, name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (entry.isFile()) out.push(full);
+    }
+  }
+  return out;
+}
+
+function readFileTool(args) {
+  const rawPath = args && typeof args.path === "string" ? args.path : "";
+  if (!rawPath) return { ok: false, error: "Missing path" };
+
+  const filePath = toAbsolutePath(rawPath);
+  let text = "";
+  try {
+    text = readUtf8TextFile(filePath);
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+
+  const lines = text.split("\n");
+  const offsetRaw = Number(args && args.offset != null ? args.offset : 1);
+  const limitRaw = Number(args && args.limit != null ? args.limit : 2000);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 1;
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.floor(limitRaw) : 2000;
+  const start = offset - 1;
+  const end = Math.min(start + limit, lines.length);
+  const numbered = [];
+  for (let i = start; i < end; i += 1) {
+    numbered.push(`${i + 1}: ${lines[i]}`);
+  }
+
+  return {
+    ok: true,
+    path: rawPath,
+    absolutePath: filePath,
+    totalLines: lines.length,
+    offset,
+    limit,
+    content: numbered.join("\n"),
+  };
+}
+
+function listFilesTool(args) {
+  const rootRaw = args && typeof args.path === "string" && args.path.trim() ? args.path : ".";
+  const root = toAbsolutePath(rootRaw);
+  const include = args && typeof args.include === "string" && args.include.trim() ? args.include.trim() : "*";
+  const includeHidden = !!(args && args.includeHidden);
+  const maxRaw = Number(args && args.maxResults != null ? args.maxResults : 2000);
+  const maxResults = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.floor(maxRaw) : 2000;
+  const rx = wildcardToRegExp(include);
+
+  let stat;
+  try {
+    stat = fs.statSync(root);
+  } catch {
+    return { ok: false, error: `Path not found: ${rootRaw}` };
+  }
+  if (!stat.isDirectory()) return { ok: false, error: `Path is not a directory: ${rootRaw}` };
+
+  const files = listFilesRecursive(root, includeHidden)
+    .map((abs) => ({ abs, rel: path.relative(root, abs) }))
+    .filter((f) => rx.test(f.rel))
+    .slice(0, maxResults)
+    .map((f) => f.rel);
+
+  return { ok: true, path: rootRaw, include, maxResults, files };
+}
+
+function searchContentTool(args) {
+  const rootRaw = args && typeof args.path === "string" && args.path.trim() ? args.path : ".";
+  const root = toAbsolutePath(rootRaw);
+  const pattern = args && typeof args.pattern === "string" ? args.pattern : "";
+  if (!pattern) return { ok: false, error: "Missing pattern" };
+
+  const include = args && typeof args.include === "string" && args.include.trim() ? args.include.trim() : "*";
+  const includeHidden = !!(args && args.includeHidden);
+  const caseSensitive = !!(args && args.caseSensitive);
+  const maxRaw = Number(args && args.maxResults != null ? args.maxResults : 2000);
+  const maxResults = Number.isFinite(maxRaw) && maxRaw > 0 ? Math.floor(maxRaw) : 2000;
+  const includeRx = wildcardToRegExp(include);
+
+  let contentRx;
+  try {
+    contentRx = new RegExp(pattern, caseSensitive ? "g" : "gi");
+  } catch (err) {
+    return { ok: false, error: `Invalid regex pattern: ${err.message}` };
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(root);
+  } catch {
+    return { ok: false, error: `Path not found: ${rootRaw}` };
+  }
+  if (!stat.isDirectory()) return { ok: false, error: `Path is not a directory: ${rootRaw}` };
+
+  const matches = [];
+  const files = listFilesRecursive(root, includeHidden);
+  for (const abs of files) {
+    if (matches.length >= maxResults) break;
+    const rel = path.relative(root, abs);
+    if (!includeRx.test(rel)) continue;
+    if (!isTextFilePath(abs)) continue;
+
+    let text = "";
+    try {
+      text = fs.readFileSync(abs, "utf8");
+    } catch {
+      continue;
+    }
+
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
+      contentRx.lastIndex = 0;
+      if (!contentRx.test(line)) continue;
+      matches.push({ path: rel, line: i + 1, preview: line.slice(0, 400) });
+      if (matches.length >= maxResults) break;
+    }
+  }
+
+  return {
+    ok: true,
+    path: rootRaw,
+    pattern,
+    include,
+    maxResults,
+    matches,
+  };
+}
+
+function writeFileTool(args) {
+  const rawPath = args && typeof args.path === "string" ? args.path : "";
+  if (!rawPath) return { ok: false, error: "Missing path" };
+  const filePath = toAbsolutePath(rawPath);
+  const content = args && typeof args.content === "string" ? args.content : "";
+  const createDirs = args && Object.prototype.hasOwnProperty.call(args, "createDirs") ? !!args.createDirs : true;
+
+  try {
+    if (createDirs) fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, content, "utf8");
+    return { ok: true, path: rawPath, bytes: Buffer.byteLength(content, "utf8") };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+function deleteFileTool(args) {
+  const rawPath = args && typeof args.path === "string" ? args.path : "";
+  if (!rawPath) return { ok: false, error: "Missing path" };
+  const target = toAbsolutePath(rawPath);
+  const recursive = !!(args && args.recursive);
+
+  try {
+    const st = fs.statSync(target);
+    if (st.isDirectory()) {
+      if (!recursive) return { ok: false, error: "Path is a directory. Use recursive=true." };
+      fs.rmSync(target, { recursive: true, force: false });
+    } else {
+      fs.unlinkSync(target);
+    }
+    return { ok: true, path: rawPath };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+function moveFileTool(args) {
+  const fromRaw = args && typeof args.path === "string" ? args.path : "";
+  const toRaw = args && typeof args.to === "string" ? args.to : "";
+  if (!fromRaw || !toRaw) return { ok: false, error: "Missing path or to" };
+
+  const from = toAbsolutePath(fromRaw);
+  const to = toAbsolutePath(toRaw);
+  const overwrite = !!(args && args.overwrite);
+
+  try {
+    if (!overwrite && fs.existsSync(to)) {
+      return { ok: false, error: `Destination already exists: ${toRaw}` };
+    }
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.renameSync(from, to);
+    return { ok: true, path: fromRaw, to: toRaw };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+function mkdirTool(args) {
+  const rawPath = args && typeof args.path === "string" ? args.path : "";
+  if (!rawPath) return { ok: false, error: "Missing path" };
+  const target = toAbsolutePath(rawPath);
+  const recursive = args && Object.prototype.hasOwnProperty.call(args, "recursive") ? !!args.recursive : true;
+
+  try {
+    fs.mkdirSync(target, { recursive });
+    return { ok: true, path: rawPath, recursive };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+}
+
+function applyPatchTool(args) {
+  const ops = args && Array.isArray(args.operations) ? args.operations : [];
+  if (ops.length === 0) return { ok: false, error: "Missing operations[]" };
+
+  const results = [];
+  for (const op of ops) {
+    const type = op && typeof op.op === "string" ? op.op : "";
+    let res;
+    if (type === "write" || type === "add" || type === "update") {
+      res = writeFileTool({ path: op.path, content: op.content, createDirs: true });
+    } else if (type === "delete") {
+      res = deleteFileTool({ path: op.path, recursive: !!op.recursive });
+    } else if (type === "move" || type === "rename") {
+      res = moveFileTool({ path: op.path, to: op.to, overwrite: !!op.overwrite });
+    } else if (type === "mkdir") {
+      res = mkdirTool({ path: op.path, recursive: op.recursive });
+    } else {
+      res = { ok: false, error: `Unknown patch op: ${type || "(empty)"}` };
+    }
+
+    results.push({ op: type, path: op && op.path ? op.path : "", result: res });
+    if (!res.ok) {
+      return { ok: false, error: `Patch failed at op '${type}': ${res.error}`, results };
+    }
+  }
+
+  return { ok: true, results };
+}
+
 /**
  * Parse "provider/model" form.
  * Returns null when format does not include provider prefix.
@@ -1555,7 +1840,8 @@ function matchesPolicyRule(rule, cmd) {
  * Evaluate command against agent.json security policy.
  */
 function evaluateCommandPolicy(cmd, opts, agentConfig) {
-  const mode = getEffectiveMode(opts, agentConfig);
+  const profile = getEffectiveProfile(opts, agentConfig);
+  const mode = profileToLegacyMode(profile);
   const security = agentConfig && agentConfig.security ? agentConfig.security : defaultAgentConfig().security;
   const modes = security.modes || {};
   const modeConfig = modes[mode] || modes.build || defaultAgentConfig().security.modes.build;
@@ -1563,37 +1849,65 @@ function evaluateCommandPolicy(cmd, opts, agentConfig) {
   const denyCritical = Array.isArray(security.denyCritical) ? security.denyCritical : [];
   for (const rule of denyCritical) {
     if (matchesPolicyRule(rule, cmd)) {
-      return { allowed: false, mode, source: "denyCritical", rule };
+      return { allowed: false, profile, mode, source: "denyCritical", rule };
     }
   }
 
   const deny = Array.isArray(modeConfig.deny) ? modeConfig.deny : [];
   for (const rule of deny) {
     if (matchesPolicyRule(rule, cmd)) {
-      return { allowed: false, mode, source: "deny", rule };
+      return { allowed: false, profile, mode, source: "deny", rule };
     }
   }
 
   const allow = Array.isArray(modeConfig.allow) ? modeConfig.allow : [];
   const isAllowed = allow.some((rule) => matchesPolicyRule(rule, cmd));
   if (!isAllowed) {
-    return { allowed: false, mode, source: "allow", rule: "no allow rule matched" };
+    return { allowed: false, profile, mode, source: "allow", rule: "no allow rule matched" };
   }
 
-  return { allowed: true, mode, source: "allow", rule: "matched" };
+  return { allowed: true, profile, mode, source: "allow", rule: "matched" };
 }
 
-/** Resolve current security mode from CLI + agent.json settings. */
+function normalizeProfileValue(raw) {
+  const v = String(raw || "").trim().toLowerCase();
+  if (!v) return "";
+  if (v === "safe" || v === "dev" || v === "framework") return v;
+  if (v === "unsafe") return "framework";
+  if (v === "plan") return "safe";
+  if (v === "build") return "dev";
+  return "";
+}
+
+function profileToLegacyMode(profile) {
+  const p = normalizeProfileValue(profile) || "dev";
+  if (p === "safe") return "plan";
+  if (p === "framework") return "unsafe";
+  return "build";
+}
+
+function getEffectiveProfile(opts, agentConfig) {
+  if (opts && opts.unsafe) return "framework";
+
+  const candidates = [
+    opts && typeof opts.profile === "string" ? opts.profile : "",
+    opts && typeof opts.mode === "string" ? opts.mode : "",
+    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.profile === "string" ? agentConfig.runtime.profile : "",
+    agentConfig && agentConfig.security && typeof agentConfig.security.profile === "string" ? agentConfig.security.profile : "",
+    agentConfig && agentConfig.security && typeof agentConfig.security.mode === "string" ? agentConfig.security.mode : "",
+    agentConfig && agentConfig.runtime && typeof agentConfig.runtime.defaultMode === "string" ? agentConfig.runtime.defaultMode : "",
+  ];
+
+  for (const c of candidates) {
+    const n = normalizeProfileValue(c);
+    if (n) return n;
+  }
+  return "dev";
+}
+
+/** Resolve current legacy security mode from profile. */
 function getEffectiveMode(opts, agentConfig) {
-  const configuredMode =
-    opts.mode ||
-    (agentConfig && agentConfig.security && typeof agentConfig.security.mode === "string"
-      ? agentConfig.security.mode
-      : "") ||
-    (agentConfig && agentConfig.runtime && typeof agentConfig.runtime.defaultMode === "string"
-      ? agentConfig.runtime.defaultMode
-      : "build");
-  return opts.unsafe ? "unsafe" : configuredMode;
+  return profileToLegacyMode(getEffectiveProfile(opts, agentConfig));
 }
 
 /** Resolve approval behavior from CLI + config. */
@@ -2257,6 +2571,7 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
  *
  * Supported environment variables:
  *   AGENT_MODEL    - provider/model (e.g. "openai/gpt-4.1")
+ *   AGENT_PROFILE  - runtime profile: safe | dev | framework | unsafe(alias)
  *   AGENT_API_KEY  - API key (overrides agent.auth.json)
  *   AGENT_MODE     - security mode: plan | build | unsafe
  *   AGENT_APPROVAL - approval mode: ask | auto | never
@@ -2273,6 +2588,7 @@ async function createChatCompletion(runtime, payload, logger, useStream, onText)
 function applyEnvOverrides(opts) {
   const out = Object.assign({}, opts);
   const envModel = process.env.AGENT_MODEL || "";
+  const envProfile = process.env.AGENT_PROFILE || "";
   const envMode = process.env.AGENT_MODE || "";
   const envApproval = process.env.AGENT_APPROVAL || "";
   const envSystemPrompt = Object.prototype.hasOwnProperty.call(process.env, "AGENT_SYSTEM_PROMPT")
@@ -2294,6 +2610,7 @@ function applyEnvOverrides(opts) {
   const envAllowInsecureHttp = (process.env.AGENT_ALLOW_INSECURE_HTTP || "").trim().toLowerCase();
 
   if (!out.model && envModel) out.model = envModel;
+  if (!out.profile && envProfile) out.profile = envProfile;
   if (!out.mode && envMode) out.mode = envMode;
   if (!out.approval && envApproval) out.approval = envApproval;
   if (!out.systemPromptSet && envSystemPrompt !== null) out.systemPrompt = envSystemPrompt;
@@ -2425,6 +2742,156 @@ async function main() {
   logger.debug(`Runtime resolved: provider='${runtime.provider}' model='${runtime.model}' base='${runtime.baseURL}'`);
 
   const tools = [
+    {
+      type: "function",
+      function: {
+        name: "read_file",
+        description: "Read a UTF-8 text file with optional line window.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "File path to read" },
+            offset: { type: "integer", description: "1-based start line" },
+            limit: { type: "integer", description: "Max lines to read" },
+          },
+          required: ["path"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "list_files",
+        description: "List files recursively from a directory.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Directory path" },
+            include: { type: "string", description: "Wildcard pattern, e.g. *.js or src/*" },
+            includeHidden: { type: "boolean", description: "Include dotfiles and dot-directories" },
+            maxResults: { type: "integer", description: "Maximum number of files returned" },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "search_content",
+        description: "Search text in files using a regex pattern.",
+        parameters: {
+          type: "object",
+          properties: {
+            pattern: { type: "string", description: "Regex pattern to search" },
+            path: { type: "string", description: "Directory path" },
+            include: { type: "string", description: "Wildcard include filter for file paths" },
+            caseSensitive: { type: "boolean", description: "Case-sensitive regex search" },
+            includeHidden: { type: "boolean", description: "Include dotfiles and dot-directories" },
+            maxResults: { type: "integer", description: "Maximum number of matches returned" },
+          },
+          required: ["pattern"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "write_file",
+        description: "Write UTF-8 text content to a file.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "File path to write" },
+            content: { type: "string", description: "Full UTF-8 content" },
+            createDirs: { type: "boolean", description: "Create parent directories when missing" },
+          },
+          required: ["path", "content"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "delete_file",
+        description: "Delete a file or directory.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Path to delete" },
+            recursive: { type: "boolean", description: "Required to delete directories" },
+          },
+          required: ["path"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "move_file",
+        description: "Move or rename a file or directory.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Source path" },
+            to: { type: "string", description: "Destination path" },
+            overwrite: { type: "boolean", description: "Overwrite destination if it exists" },
+          },
+          required: ["path", "to"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "mkdir",
+        description: "Create a directory.",
+        parameters: {
+          type: "object",
+          properties: {
+            path: { type: "string", description: "Directory path" },
+            recursive: { type: "boolean", description: "Create parent directories" },
+          },
+          required: ["path"],
+          additionalProperties: false,
+        },
+      },
+    },
+    {
+      type: "function",
+      function: {
+        name: "apply_patch",
+        description: "Apply multiple file operations in order (write/update/delete/move/mkdir).",
+        parameters: {
+          type: "object",
+          properties: {
+            operations: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  op: { type: "string", description: "Operation: add|update|write|delete|move|rename|mkdir" },
+                  path: { type: "string", description: "Path for operation" },
+                  to: { type: "string", description: "Destination path for move/rename" },
+                  content: { type: "string", description: "File content for add/update/write" },
+                  recursive: { type: "boolean", description: "Recursive directory delete/create" },
+                  overwrite: { type: "boolean", description: "Overwrite destination on move" },
+                },
+                required: ["op", "path"],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ["operations"],
+          additionalProperties: false,
+        },
+      },
+    },
     {
       type: "function",
       function: {
@@ -2582,7 +3049,23 @@ async function main() {
       }
 
       let result;
-      if (name === "run_command") {
+      if (name === "read_file") {
+        result = readFileTool(args);
+      } else if (name === "list_files") {
+        result = listFilesTool(args);
+      } else if (name === "search_content") {
+        result = searchContentTool(args);
+      } else if (name === "write_file") {
+        result = writeFileTool(args);
+      } else if (name === "delete_file") {
+        result = deleteFileTool(args);
+      } else if (name === "move_file") {
+        result = moveFileTool(args);
+      } else if (name === "mkdir") {
+        result = mkdirTool(args);
+      } else if (name === "apply_patch") {
+        result = applyPatchTool(args);
+      } else if (name === "run_command") {
         result = await runCommandTool(args, opts, agentConfig);
       } else {
         result = { ok: false, error: `Unknown tool: ${name}` };
@@ -2607,6 +3090,7 @@ async function main() {
     ok: true,
     provider: runtime.provider,
     model: `${runtime.provider}/${runtime.model}`,
+    profile: getEffectiveProfile(opts, agentConfig),
     mode: getEffectiveMode(opts, agentConfig),
     approvalMode,
     toolsMode,
@@ -2686,6 +3170,7 @@ module.exports = {
   tokenizeCommand,
   matchesPolicyRule,
   evaluateCommandPolicy,
+  getEffectiveProfile,
   getEffectiveMode,
   getEffectiveApprovalMode,
   getEffectiveToolsMode,
@@ -2702,6 +3187,15 @@ module.exports = {
   resolveAttachmentLimits,
   resolveSystemPrompt,
   resolveUsageStatsConfig,
+  wildcardToRegExp,
+  readFileTool,
+  listFilesTool,
+  searchContentTool,
+  writeFileTool,
+  deleteFileTool,
+  moveFileTool,
+  mkdirTool,
+  applyPatchTool,
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
   selectTopModels,

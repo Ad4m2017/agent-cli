@@ -78,7 +78,7 @@ node agent-connect.js
 
 The interactive wizard lets you pick a provider, enter your API key, and set defaults. In TTY terminals, use arrow keys + Enter to navigate menus.
 
-Wizard highlights in `v1.3.4`:
+Wizard highlights in `v1.3.5`:
 - Provider status labels (`installed`, `installed, default`, `not configured`)
 - Quick action `Set default provider/model only` (no full reconfiguration needed)
 - Optional model refresh from live `/models` with fallback to `models.dev`
@@ -105,25 +105,28 @@ node agent.js -m "What files are in this directory?"
 node agent.js -m "Run the tests and summarize the results" --approval auto
 ```
 
-The agent will execute `run_command` tool calls automatically when `--approval auto` is set.
+The agent will execute tool calls automatically when `--approval auto` is set.
 
 ## Concepts
 
 ### Tool Calling
 
-The agent provides the AI model with a `run_command` tool. When the model decides a shell command would help answer your question, it issues a tool call. The agent executes the command, sends the output back to the model, and the model incorporates the result into its response.
+The agent provides the AI model with specialized tools (`read_file`, `list_files`, `search_content`, `write_file`, `delete_file`, `move_file`, `mkdir`, `apply_patch`) plus `run_command`. When the model decides a tool would help answer your question, it issues a tool call. The agent executes the tool, sends the output back to the model, and the model incorporates the result into its response.
 
 This creates an **agentic loop**: the AI can inspect files, run tests, check git status, and reason about the output -- all within a single prompt.
 
-### Security Modes
+### Runtime Profiles
 
-Every command the AI wants to run is checked against a security policy defined in `agent.json`. There are three modes:
+Every command the AI wants to run is checked against a security policy defined in `agent.json`. Profile selection is now:
 
-| Mode | Purpose | Allowed | Blocked |
-|------|---------|---------|---------|
-| `plan` | Read-only exploration | `ls`, `pwd`, `git status`, `git log`, `node -v` | `rm`, `sudo`, `docker`, `npm install`, `git push` |
-| `build` | Normal development | `git`, `node`, `npm`, `python`, `docker`, `make` | `rm`, `sudo`, `shutdown`, `mkfs`, `chown` |
-| `unsafe` | Broad command scope | Everything (`*`) | `rm -rf /`, `mkfs`, `shutdown`, `reboot`, `poweroff` |
+| Profile | Purpose | Legacy Mode Alias |
+|---------|---------|-------------------|
+| `safe` | Conservative command scope | `plan` |
+| `dev` | Normal development defaults | `build` |
+| `framework` | Broad command scope | `unsafe` |
+
+You can select a profile via `--profile` or `runtime.profile` in `agent.json`.
+`--mode` is still accepted as a backward-compatible alias.
 
 Regardless of mode, a `denyCritical` list always blocks catastrophic commands like `rm -rf /`, `mkfs`, and piping curl/wget into shell.
 
@@ -176,7 +179,8 @@ Options:
   --config <path>        Path to agent.json (default: ./agent.json)
   --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)
   --json                 Output structured JSON with tool call details
-  --mode <name>          Security mode: plan, build, unsafe
+  --profile <name>       Runtime profile: safe, dev, framework
+  --mode <name>          Security mode (legacy alias): plan, build, unsafe
   --approval <name>      Approval mode: ask, auto, never
   --tools <name>         Tools mode: auto, on, off
   --no-tools             Alias for --tools off
@@ -341,7 +345,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `1.3.4` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `1.3.5` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
