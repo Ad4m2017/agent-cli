@@ -90,6 +90,7 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 - `usageStats.file` (`string`, optional) -- Pfad zur Usage-Log-Datei. Standard: `.agent-usage.ndjson`.
 - `usageStats.retentionDays` (`number`, optional) -- Behaelt Stats-Eintraege so viele Tage. Standard: `90`.
 - `usageStats.maxBytes` (`number`, optional) -- Softes Dateigroessenlimit; wird bei `--stats`-Kompaktierung angewendet. Standard: `5242880` (5 MB).
+- Die `--stats` Text-Ausgabe enthaelt Gesamtwerte plus `By Provider`/`By Model` und zeigt Rohwert + kompakte Form (z.B. `12345 (12.3k)`).
 
 ### security
 

@@ -262,7 +262,7 @@ Optionen:
   --max-files <n>        Integer >= 0, 0 = unbegrenzt
   --max-images <n>       Integer >= 0, 0 = unbegrenzt
   --yes                  Alias fuer --approval auto
-  --stats                Lokale Usage-Statistiken aus .agent-usage.ndjson anzeigen
+  --stats                Lokale Usage-Statistiken aus .agent-usage.ndjson anzeigen (By Provider/By Model)
   --unsafe               Unsafe-Modus erzwingen
   --log                  Fehler-Logging aktivieren
   --log-file <pfad>      Standard: ./agent.js.log
@@ -276,6 +276,7 @@ Optionen:
 ```
 
 Usage-Stats sind optional ueber `runtime.usageStats.enabled=true` in `agent.json`.
+Die `--stats` Text-Ausgabe zeigt Gesamtwerte plus Aufschluesselungen nach Provider/Model mit Rohwerten und kompakter Form (z.B. `12345 (12.3k)`).
 
 Wenn `-m/--message` fehlt, wird der Prompt aus stdin gelesen:
 

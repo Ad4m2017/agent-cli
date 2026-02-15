@@ -53,6 +53,7 @@ const {
   extractUsageStatsFromCompletion,
   buildUsageStatsReport,
   compactUsageStatsEntries,
+  formatUsageStatsText,
   parseDateMs,
   formatIsoFromSeconds,
   isTokenStillValid,
@@ -1554,6 +1555,31 @@ describe("buildUsageStatsReport", () => {
     assert.equal(report.total_tokens, 15);
     assert.equal(report.by_provider.openai.requests_total, 2);
     assert.equal(report.by_model["openai/gpt-5-mini"].requests_with_usage, 1);
+  });
+});
+
+describe("formatUsageStatsText", () => {
+  it("includes input/output tokens for provider/model with human-readable values", () => {
+    const report = buildUsageStatsReport([
+      {
+        provider: "openai",
+        model: "openai/gpt-5-mini",
+        request_count: 1,
+        input_tokens: 12345,
+        output_tokens: 6789,
+        total_tokens: 19134,
+        has_usage: true,
+      },
+    ]);
+
+    const out = formatUsageStatsText(report, { filePath: "/tmp/.agent-usage.ndjson" });
+    assert.match(out, /input_tokens: 12345 \(12\.3k\)/);
+    assert.match(out, /output_tokens: 6789 \(6\.79k\)/);
+    assert.match(out, /total_tokens: 19134 \(19\.1k\)/);
+    assert.match(out, /By Provider/);
+    assert.match(out, /openai: requests=1, with_usage=1, input_tokens=12345 \(12\.3k\), output_tokens=6789 \(6\.79k\), total_tokens=19134 \(19\.1k\)/);
+    assert.match(out, /By Model/);
+    assert.match(out, /openai\/gpt-5-mini: requests=1, with_usage=1, input_tokens=12345 \(12\.3k\), output_tokens=6789 \(6\.79k\), total_tokens=19134 \(19\.1k\)/);
   });
 });
 

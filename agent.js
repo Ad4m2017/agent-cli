@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.0";
+const AGENT_VERSION = "1.3.1";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -1144,6 +1144,34 @@ function buildUsageStatsReport(entries) {
   return report;
 }
 
+function formatHumanNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "0";
+  const abs = Math.abs(n);
+  if (abs < 1000) return String(Math.round(n));
+
+  const units = [
+    { limit: 1_000_000_000, suffix: "b" },
+    { limit: 1_000_000, suffix: "m" },
+    { limit: 1000, suffix: "k" },
+  ];
+
+  for (const u of units) {
+    if (abs >= u.limit) {
+      const scaled = n / u.limit;
+      const text = Math.abs(scaled) >= 10 ? scaled.toFixed(1) : scaled.toFixed(2);
+      return `${text.replace(/\.0+$/, "").replace(/(\.\d*[1-9])0+$/, "$1")}${u.suffix}`;
+    }
+  }
+
+  return String(Math.round(n));
+}
+
+function formatUsageMetric(value) {
+  const n = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+  return `${n} (${formatHumanNumber(n)})`;
+}
+
 function formatUsageStatsText(report, statsConfig) {
   const lines = [
     "Usage Stats",
@@ -1151,9 +1179,9 @@ function formatUsageStatsText(report, statsConfig) {
     `- requests_total: ${report.requests_total}`,
     `- requests_with_usage: ${report.requests_with_usage}`,
     `- requests_usage_missing: ${report.requests_usage_missing}`,
-    `- input_tokens: ${report.input_tokens}`,
-    `- output_tokens: ${report.output_tokens}`,
-    `- total_tokens: ${report.total_tokens}`,
+    `- input_tokens: ${formatUsageMetric(report.input_tokens)}`,
+    `- output_tokens: ${formatUsageMetric(report.output_tokens)}`,
+    `- total_tokens: ${formatUsageMetric(report.total_tokens)}`,
   ];
 
   const providerNames = Object.keys(report.by_provider).sort();
@@ -1161,7 +1189,9 @@ function formatUsageStatsText(report, statsConfig) {
     lines.push("", "By Provider");
     for (const name of providerNames) {
       const p = report.by_provider[name];
-      lines.push(`- ${name}: requests=${p.requests_total}, with_usage=${p.requests_with_usage}, total_tokens=${p.total_tokens}`);
+      lines.push(
+        `- ${name}: requests=${p.requests_total}, with_usage=${p.requests_with_usage}, input_tokens=${formatUsageMetric(p.input_tokens)}, output_tokens=${formatUsageMetric(p.output_tokens)}, total_tokens=${formatUsageMetric(p.total_tokens)}`
+      );
     }
   }
 
@@ -1170,7 +1200,9 @@ function formatUsageStatsText(report, statsConfig) {
     lines.push("", "By Model");
     for (const name of modelNames) {
       const m = report.by_model[name];
-      lines.push(`- ${name}: requests=${m.requests_total}, with_usage=${m.requests_with_usage}, total_tokens=${m.total_tokens}`);
+      lines.push(
+        `- ${name}: requests=${m.requests_total}, with_usage=${m.requests_with_usage}, input_tokens=${formatUsageMetric(m.input_tokens)}, output_tokens=${formatUsageMetric(m.output_tokens)}, total_tokens=${formatUsageMetric(m.total_tokens)}`
+      );
     }
   }
 

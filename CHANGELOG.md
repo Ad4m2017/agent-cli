@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.1] - 2026-02-15
+
+### Added
+- `--stats` text output now includes `input_tokens` and `output_tokens` in `By Provider` and `By Model` sections.
+- Human-readable token formatting added to stats text output (raw + compact values, e.g. `12345 (12.3k)`).
+
+### Changed
+- Version bumped from `1.3.0` to `1.3.1` in `agent.js`, `agent-connect.js`, and `package.json`.
+- README and docs updated to reflect enhanced `--stats` output.
+
 ## [1.3.0] - 2026-02-15
 
 ### Added

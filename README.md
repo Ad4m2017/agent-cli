@@ -78,7 +78,7 @@ node agent-connect.js
 
 The interactive wizard lets you pick a provider, enter your API key, and set defaults. In TTY terminals, use arrow keys + Enter to navigate menus.
 
-Wizard highlights in `v1.3.0`:
+Wizard highlights in `v1.3.1`:
 - Provider status labels (`installed`, `installed, default`, `not configured`)
 - Quick action `Set default provider/model only` (no full reconfiguration needed)
 - Optional model refresh from live `/models` with fallback to `models.dev`
@@ -188,7 +188,7 @@ Options:
   --max-files <n>        Max number of --file attachments (integer >= 0, 0 = unlimited)
   --max-images <n>       Max number of --image attachments (integer >= 0, 0 = unlimited)
   --yes                  Alias for --approval auto
-  --stats                Show local usage stats from .agent-usage.ndjson
+  --stats                Show local usage stats from .agent-usage.ndjson (includes By Provider/By Model)
   --unsafe               Force unsafe mode (denyCritical rules still apply)
   --log                  Enable error logging to file
   --log-file <path>      Log file path (default: ./agent.js.log)
@@ -244,6 +244,7 @@ Options:
 - For neutral behavior, leave `runtime.systemPrompt` unset (or empty string).
 - Attachment limits are opt-in: set `runtime.attachments.*` or CLI flags only when your project needs hard caps.
 - Usage stats logging is opt-in: set `runtime.usageStats.enabled=true` to record request/token metadata in `.agent-usage.ndjson`.
+- `--stats` text output shows request/token totals and breakdowns by provider/model with raw + compact values (e.g. `12345 (12.3k)`).
 
 ## Real-World Examples
 
@@ -340,7 +341,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `1.3.0` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `1.3.1` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
