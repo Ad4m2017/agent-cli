@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JSON Contract | Agent CLI Docs</title>
+    <link rel="stylesheet" href="./assets/docs.css" />
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">Agent CLI Docs</div>
+        <p class="hint">Minimal + professional terminal agent</p>
+        <nav class="nav"><a class="" href="./index.html">Get Started</a>
+<a class="" href="./api-examples.html">Scripts</a>
+<a class="active" href="./json-contract.html">JSON Contract</a>
+<a class="" href="./config-reference.html">Config</a></nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1 class="title">JSON Contract</h1>
+            <p class="subtitle">Documentation in a modern docs layout for CLI workflows.</p>
+          </div>
+          <div class="controls">
+            <button id="nav-toggle" class="mobile-toggle">Menu</button>
+            <button id="theme-toggle" aria-label="Toggle Theme"><svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></button>
+            <select id="lang-switch" class="lang-select" aria-label="Select language">
+              <option value="./json-contract.html" selected>🇺🇸 English</option>
+<option value="./de/json-contract.html">🇩🇪 Deutsch</option>
+            </select>
+          </div>
+        </div>
+        <article class="article">
+<h1 id="json-contract">JSON Contract</h1>
+<p>This page defines the stable <code>--json</code> output contract for <code>agent.js</code>.</p>
+<h2 id="top-level-responses">Top-Level Responses</h2>
+<h3 id="success-shape">Success shape</h3>
+<p>Guaranteed keys on success:</p>
+<ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
+<p>Optional keys on success:</p>
+<ul><li><code>legacyModeMappedFrom</code> (present only when legacy mode aliases were mapped)</li></ul>
+<h3 id="error-shape">Error shape</h3>
+<p>Guaranteed keys on error:</p>
+<ul><li><code>ok</code></li><li><code>error</code></li><li><code>code</code></li></ul>
+<h2 id="tool-call-records">Tool Call Records</h2>
+<p>Each entry in <code>toolCalls</code> is normalized as:</p>
+<ul><li><code>tool</code></li><li><code>input</code></li><li><code>ok</code></li><li><code>result</code></li><li><code>error</code></li><li><code>meta</code></li></ul>
+<p>When <code>ok</code> is <code>false</code>, <code>error.code</code> is always set (fallback: <code>TOOL_EXECUTION_ERROR</code>).</p>
+<h2 id="tool-error-codes">Tool Error Codes</h2>
+<ul><li><code>TOOL_INVALID_ARGS</code></li><li><code>TOOL_NOT_FOUND</code></li><li><code>TOOL_INVALID_PATTERN</code></li><li><code>TOOL_UNSUPPORTED_FILE_TYPE</code></li><li><code>TOOL_CONFLICT</code></li><li><code>TOOL_UNKNOWN</code></li><li><code>TOOL_EXECUTION_ERROR</code></li></ul>
+<h2 id="machine-readable-schema">Machine-Readable Schema</h2>
+<p>Print the schema used by this contract:</p>
+<pre><code class="language-bash">node agent.js --json-schema</code></pre>
+        </article>
+      </main>
+      <aside class="right">
+        <div class="toc-title">On This Page</div>
+        <nav class="toc"><a href="#top-level-responses">Top-Level Responses</a>
+<a class="sub-item" href="#success-shape">Success shape</a>
+<a class="sub-item" href="#error-shape">Error shape</a>
+<a href="#tool-call-records">Tool Call Records</a>
+<a href="#tool-error-codes">Tool Error Codes</a>
+<a href="#machine-readable-schema">Machine-Readable Schema</a></nav>
+      </aside>
+    </div>
+    <script src="./assets/docs.js"></script>
+  </body>
+</html>

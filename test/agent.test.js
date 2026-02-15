@@ -15,6 +15,7 @@ const {
   parseRetryAfter,
   fetchWithRetry,
   parseCliArgs,
+  buildJsonOutputSchema,
   applyEnvOverrides,
   resolveConfigPaths,
   resolveCommandTimeoutMs,
@@ -128,6 +129,7 @@ describe("parseCliArgs", () => {
     assert.equal(opts.authConfigPath, "");
     assert.equal(opts.log, false);
     assert.equal(opts.json, false);
+    assert.equal(opts.jsonSchema, false);
     assert.equal(opts.unsafe, false);
     assert.equal(opts.verbose, false);
     assert.equal(opts.debug, false);
@@ -245,6 +247,11 @@ describe("parseCliArgs", () => {
     assert.equal(opts.statsTop, null);
   });
 
+  it("parses --json-schema", () => {
+    const opts = parseCliArgs(["--json-schema"]);
+    assert.equal(opts.jsonSchema, true);
+  });
+
   it("parses --stats N as top-N", () => {
     const opts = parseCliArgs(["--stats", "10"]);
     assert.equal(opts.stats, true);
@@ -282,6 +289,23 @@ describe("parseCliArgs", () => {
     assert.equal(opts.unsafe, true);
     assert.equal(opts.log, true);
     assert.equal(opts.model, "openai/gpt-4o");
+  });
+});
+
+describe("buildJsonOutputSchema", () => {
+  it("returns schema with required top-level ok field", () => {
+    const s = buildJsonOutputSchema();
+    assert.equal(s.type, "object");
+    assert.deepEqual(s.required, ["ok"]);
+    assert.equal(typeof s.properties, "object");
+    assert.equal(s.properties.ok.type, "boolean");
+  });
+
+  it("includes toolCalls normalized schema", () => {
+    const s = buildJsonOutputSchema();
+    const items = s.properties.toolCalls.items;
+    assert.equal(items.type, "object");
+    assert.deepEqual(items.required, ["tool", "input", "ok", "result", "error", "meta"]);
   });
 });
 

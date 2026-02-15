@@ -4,12 +4,30 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.9] - 2026-02-15
+
+### Added
+- Added `--json-schema` CLI option to print a machine-readable schema for `--json` output.
+- Added dedicated JSON contract docs pages:
+  - `docs/content/en/json-contract.md`
+  - `docs/content/de/json-contract.md`
+- Added deterministic mock-provider end-to-end smoke suite in `test/agent-e2e.test.js` covering `read_file`, `search_content`, `apply_patch`, and `run_command`.
+- Added explicit CI execution for the e2e smoke suite in `.github/workflows/ci.yml`.
+
+### Changed
+- Expanded API examples/docs with guaranteed vs optional JSON fields and documented tool error codes.
+- Updated blocked-tool examples to use `TOOL_EXECUTION_ERROR` in normalized tool-call records.
+- Bumped versions from `1.3.8` to `1.3.9` in `agent.js`, `agent-connect.js`, and `package.json`.
+- Updated README version labels in `README.md` and `README.de.md`.
+
 ## [1.3.8] - 2026-02-15
 
 ### Added
 - Added deterministic mock-provider end-to-end smoke tests in `test/agent-e2e.test.js` for `read_file`, `search_content`, `apply_patch`, and `run_command` tool flows.
 - Added explicit CI execution of the e2e smoke suite in `.github/workflows/ci.yml`.
 - Extended API examples/docs with a clearer JSON contract section (guaranteed vs optional fields) and documented tool error codes.
+- Added `--json-schema` CLI option to print a machine-readable schema for `--json` output.
+- Added dedicated JSON contract docs page (`docs/content/en/json-contract.md`, `docs/content/de/json-contract.md`).
 
 ### Changed
 - Updated API examples to use `TOOL_EXECUTION_ERROR` for blocked tool-call examples.

@@ -264,6 +264,7 @@ Options:
   --max-images <n>       Integer >= 0, 0 = unlimited
   --yes                  Alias for --approval auto
   --stats [N]            Show usage stats (all models or top N)
+  --json-schema          Print JSON schema for --json output
   --unsafe               Force unsafe mode
   --log                  Enable error logging
   --log-file <path>      Default: ./agent.js.log

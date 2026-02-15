@@ -10,6 +10,7 @@ const contentDir = path.join(docsDir, "content");
 const pages = [
   { slug: "index", source: "get-started.md", titles: { en: "Get Started", de: "Einstieg" } },
   { slug: "api-examples", source: "api-examples.md", titles: { en: "Scripts", de: "Skripte" } },
+  { slug: "json-contract", source: "json-contract.md", titles: { en: "JSON Contract", de: "JSON-Vertrag" } },
   { slug: "config-reference", source: "config-reference.md", titles: { en: "Config", de: "Konfiguration" } },
 ];
 

@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.3.8";
+const AGENT_VERSION = "1.3.9";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -214,6 +214,7 @@ function parseCliArgs(argv) {
     log: false,
     logFile: "agent.js.log",
     json: false,
+    jsonSchema: false,
     unsafe: false,
     verbose: false,
     debug: false,
@@ -279,6 +280,11 @@ function parseCliArgs(argv) {
 
     if (a === "--json") {
       opts.json = true;
+      continue;
+    }
+
+    if (a === "--json-schema") {
+      opts.jsonSchema = true;
       continue;
     }
 
@@ -435,6 +441,7 @@ function printHelp() {
     "  --config <path>        Path to agent.json (default: ./agent.json)",
     "  --auth-config <path>   Path to agent.auth.json (default: ./agent.auth.json)",
     "  --json                 Output JSON with tool details",
+    "  --json-schema          Print JSON schema for --json output",
     "  --log                  Log errors to file (default off)",
     "  --log-file <path>      Log file path (default: ./agent.js.log)",
     "  --verbose              Print additional runtime diagnostics",
@@ -467,6 +474,102 @@ function printHelp() {
   ].join("\n");
 
   process.stdout.write(`${txt}\n`);
+}
+
+function buildJsonOutputSchema() {
+  return {
+    $schema: "https://json-schema.org/draft/2020-12/schema",
+    $id: "https://agent-cli.local/schema/output.json",
+    title: "agent-cli JSON Output",
+    type: "object",
+    properties: {
+      ok: { type: "boolean" },
+      provider: { type: "string" },
+      model: { type: "string" },
+      profile: { type: "string", enum: ["safe", "dev", "framework"] },
+      legacyModeMappedFrom: { type: "string" },
+      mode: { type: "string" },
+      approvalMode: { type: "string" },
+      toolsMode: { type: "string" },
+      toolsEnabled: { type: "boolean" },
+      toolsFallbackUsed: { type: "boolean" },
+      attachments: {
+        type: "object",
+        properties: {
+          files: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+                size: { type: "number" },
+                type: { type: "string" },
+              },
+              required: ["path", "size", "type"],
+            },
+          },
+          images: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+                size: { type: "number" },
+                type: { type: "string" },
+              },
+              required: ["path", "size", "type"],
+            },
+          },
+        },
+        required: ["files", "images"],
+      },
+      usage: {
+        type: "object",
+        properties: {
+          turns: { type: "number" },
+          turns_with_usage: { type: "number" },
+          has_usage: { type: "boolean" },
+          input_tokens: { type: "number" },
+          output_tokens: { type: "number" },
+          total_tokens: { type: "number" },
+        },
+        required: ["turns", "turns_with_usage", "has_usage", "input_tokens", "output_tokens", "total_tokens"],
+      },
+      message: { type: "string" },
+      toolCalls: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            tool: { type: "string" },
+            input: { type: "object" },
+            ok: { type: "boolean" },
+            result: { type: ["object", "null"] },
+            error: {
+              type: ["object", "null"],
+              properties: {
+                message: { type: "string" },
+                code: { type: "string" },
+              },
+            },
+            meta: {
+              type: "object",
+              properties: {
+                duration_ms: { type: "number" },
+                ts: { type: "string" },
+              },
+              required: ["duration_ms", "ts"],
+            },
+          },
+          required: ["tool", "input", "ok", "result", "error", "meta"],
+        },
+      },
+      timingMs: { type: "number" },
+      error: { type: "string" },
+      code: { type: "string" },
+    },
+    required: ["ok"],
+  };
 }
 
 function redactSensitiveText(input) {
@@ -2829,6 +2932,11 @@ async function main() {
     process.exit(0);
   }
 
+  if (opts.jsonSchema) {
+    process.stdout.write(`${JSON.stringify(buildJsonOutputSchema(), null, 2)}\n`);
+    process.exit(0);
+  }
+
   if (opts.stats) {
     let agentConfigForStats = null;
     try {
@@ -3339,6 +3447,7 @@ module.exports = {
   parseRetryAfter,
   fetchWithRetry,
   parseCliArgs,
+  buildJsonOutputSchema,
   applyEnvOverrides,
   resolveConfigPaths,
   resolveCommandTimeoutMs,
