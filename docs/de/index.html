@@ -84,18 +84,18 @@ node agent.js -m &quot;Erklaere diesen Fehler&quot; --model groq/llama-3.3-70b-v
 <p>Das erzeugt eine agentische Schleife, in der die KI:</p>
 <ul><li>Dateien auflisten und lesen kann</li><li>Tests und Linter ausfuehren kann</li><li>Git-Status und History pruefen kann</li><li>Build-Befehle ausfuehren kann</li><li>Laufende Prozesse inspizieren kann</li></ul>
 <p>Die Schleife laeuft fuer bis zu 5 Runden, bevor der Agent eine finale Textantwort erzwingt.</p>
-<h3 id="sicherheitsmodi">Sicherheitsmodi</h3>
+<h3 id="sicherheitsprofile">Sicherheitsprofile</h3>
 <p>Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine dreischichtige Sicherheitsrichtlinie in <code>agent.json</code> geprueft:</p>
-<p><strong>Schicht 1: denyCritical</strong> -- blockiert immer katastrophale Befehle, unabhaengig vom Modus:</p>
+<p><strong>Schicht 1: denyCritical</strong> -- blockiert immer katastrophale Befehle, unabhaengig vom Profil:</p>
 <ul><li><code>rm -rf /</code></li><li><code>mkfs</code></li><li><code>shutdown</code>, <code>reboot</code>, <code>poweroff</code></li><li><code>dd if=</code></li><li>Pipen von curl/wget in sh/bash</li></ul>
-<p><strong>Schicht 2: Modusspezifische Deny-Regeln</strong> -- blockiert Befehle basierend auf dem aktuellen Modus.</p>
-<p><strong>Schicht 3: Modusspezifische Allow-Regeln</strong> -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.</p>
+<p><strong>Schicht 2: Profilspezifische Deny-Regeln</strong> -- blockiert Befehle basierend auf dem aktuellen Profil.</p>
+<p><strong>Schicht 3: Profilspezifische Allow-Regeln</strong> -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.</p>
 <p>Auswertungsreihenfolge: denyCritical -&gt; deny -&gt; allow. Ein Befehl muss alle drei Schichten bestehen.</p>
-<p>Die drei Modi:</p>
-<ul><li><strong>plan</strong> -- Nur-Lesen-Erkundung. Nur <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> erlaubt. Destruktive Befehle, Paketinstallationen und Pushes sind blockiert.</li><li><strong>build</strong> (Standard) -- Normale Entwicklung. Git, Node.js, npm, Python, Docker, Make sind erlaubt. <code>rm</code>, <code>sudo</code> und System-Level-Befehle sind blockiert.</li><li><strong>unsafe</strong> -- Breiter Umfang. Alle Befehle erlaubt ausser <code>denyCritical</code>-Eintraege. Mit Vorsicht verwenden.</li></ul>
+<p>Die drei Profile:</p>
+<ul><li><strong>safe</strong> -- Konservativer Befehlsumfang. Lese-/Erkundungsbefehle sind erlaubt; destruktive Befehle, Paketinstallationen und Pushes bleiben blockiert.</li><li><strong>dev</strong> (Standard) -- Normale Entwicklungs-Defaults. Git/Node/npm/Python/Docker-Workflows sind erlaubt; kritische/destruktive Befehle bleiben blockiert.</li><li><strong>framework</strong> -- Breiter Umfang. Die meisten Befehle sind erlaubt, ausser <code>denyCritical</code>-Eintraege. Mit Vorsicht verwenden.</li></ul>
 <h3 id="freigabemodi-approval">Freigabemodi (Approval)</h3>
 <p>Steuert das Human-in-the-Loop-Verhalten fuer die Befehlsausfuehrung:</p>
-<ul><li><strong>ask</strong> (Standard) -- Der Agent fragt vor jedem Befehl: <code>Approve? [y/N]</code>. Erfordert ein TTY-Terminal. Das ist der sicherste Modus fuer interaktive Nutzung.</li><li><strong>auto</strong> -- Fuehrt richtlinienkonforme Befehle sofort ohne Nachfrage aus. Erforderlich fuer CI/CD und Scripting. Mit <code>--json</code> fuer Automation verwenden.</li><li><strong>never</strong> -- Blockiert jede Befehlsausfuehrung. Die KI kann nur mit Text antworten, nie Befehle ausfuehren.</li></ul>
+<ul><li><strong>ask</strong> (Standard) -- Der Agent fragt vor jedem Befehl: <code>Approve? [y/N]</code>. Erfordert ein TTY-Terminal. Das ist die sicherste Einstellung fuer interaktive Nutzung.</li><li><strong>auto</strong> -- Fuehrt richtlinienkonforme Befehle sofort ohne Nachfrage aus. Erforderlich fuer CI/CD und Scripting. Mit <code>--json</code> fuer Automation verwenden.</li><li><strong>never</strong> -- Blockiert jede Befehlsausfuehrung. Die KI kann nur mit Text antworten, nie Befehle ausfuehren.</li></ul>
 <h3 id="tools-modi">Tools-Modi</h3>
 <p>Steuert, ob Tool-Calling-Payloads in API-Anfragen enthalten sind:</p>
 <ul><li><strong>auto</strong> (Standard) -- Sendet Tool-Definitionen an das Modell. Wenn das Modell sie ablehnt (z.B. Perplexity-Modelle), automatischer Retry ohne Tools.</li><li><strong>on</strong> -- Sendet immer Tool-Definitionen. Gibt <code>TOOLS_NOT_SUPPORTED</code>-Fehler zurueck wenn das Modell sie nicht verarbeiten kann.</li><li><strong>off</strong> -- Sendet nie Tool-Definitionen. Die KI antwortet nur mit Text.</li></ul>
@@ -124,7 +124,7 @@ node agent.js -m &quot;Erklaere diesen Fehler&quot; --model groq/llama-3.3-70b-v
 # Suche-basierte Antworten
 node agent.js -m &quot;Neueste Node.js Security-Patches?&quot; --model perplexity/sonar --no-tools
 
-# Voller Agent-Modus
+# Voller Agent-Workflow
 node agent.js -m &quot;Behebe den fehlschlagenden Test&quot; --model openai/gpt-4.1 --approval auto</code></pre>
 <h3 id="json-ausgabe-fuer-scripting">JSON-Ausgabe fuer Scripting</h3>
 <pre><code class="language-bash">node agent.js -m &quot;Tests ausfuehren&quot; --json --approval auto --profile dev</code></pre>
@@ -151,7 +151,7 @@ Optionen:
   --yes                  Alias fuer --approval auto
   --stats [N]            Usage-Statistiken anzeigen (alle Modelle oder Top N)
   --json-schema          JSON-Schema fuer --json-Output ausgeben
-  --unsafe               Unsafe-Modus erzwingen
+  --unsafe               Framework-Profil erzwingen
   --log                  Fehler-Logging aktivieren
   --log-file &lt;pfad&gt;      Standard: ./agent.js.log
   --verbose              Zusaetzliche Laufzeitdiagnostik
@@ -183,7 +183,7 @@ Optionen:
 <a href="#erster-start">Erster Start</a>
 <a href="#konzepte">Konzepte</a>
 <a class="sub-item" href="#tool-calling">Tool-Calling</a>
-<a class="sub-item" href="#sicherheitsmodi">Sicherheitsmodi</a>
+<a class="sub-item" href="#sicherheitsprofile">Sicherheitsprofile</a>
 <a class="sub-item" href="#freigabemodi-approval">Freigabemodi (Approval)</a>
 <a class="sub-item" href="#tools-modi">Tools-Modi</a>
 <a class="sub-item" href="#provider">Provider</a>

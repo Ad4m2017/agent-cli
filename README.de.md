@@ -127,9 +127,9 @@ Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine Sicherheitsrichtlin
 
 Du kannst ein Profil mit `--profile` oder `runtime.profile` in `agent.json` waehlen.
 
-Unabhaengig vom Modus blockiert eine `denyCritical`-Liste immer katastrophale Befehle wie `rm -rf /`, `mkfs` und das Pipen von curl/wget in eine Shell.
+Unabhaengig vom Profil blockiert eine `denyCritical`-Liste immer katastrophale Befehle wie `rm -rf /`, `mkfs` und das Pipen von curl/wget in eine Shell.
 
-Auswertungsreihenfolge: `denyCritical` -> `mode.deny` -> `mode.allow`.
+Auswertungsreihenfolge: `denyCritical` -> `modes[profile].deny` -> `modes[profile].allow`.
 
 ### Freigabemodi (Approval)
 
@@ -181,7 +181,7 @@ Optionen:
   --json-schema          JSON-Schema fuer --json-Output ausgeben
   --profile <name>       Runtime-Profil: safe, dev, framework
   --approval <name>      Freigabemodus: ask, auto, never
-  --tools <name>         Tools-Modus: auto, on, off
+  --tools <name>         Tools-Einstellung: auto, on, off
   --no-tools             Alias fuer --tools off
   --file <pfad>          Textdatei als Kontext anhaengen (wiederholbar)
   --image <pfad>         Bilddatei anhaengen (wiederholbar)
@@ -192,7 +192,7 @@ Optionen:
   --max-images <n>       Max Anzahl --image Anhaenge (Integer >= 0, 0 = unbegrenzt)
   --yes                  Alias fuer --approval auto
   --stats [N]            Usage-Statistiken anzeigen (alle Modelle oder Top N)
-  --unsafe               Unsafe-Modus erzwingen (denyCritical-Regeln gelten weiterhin)
+  --unsafe               Framework-Profil erzwingen (denyCritical-Regeln gelten weiterhin)
   --log                  Fehler-Logging in Datei aktivieren
   --log-file <pfad>      Log-Dateipfad (Standard: ./agent.js.log)
   --verbose              Zusaetzliche Laufzeitdiagnostik ausgeben

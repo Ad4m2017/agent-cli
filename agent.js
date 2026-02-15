@@ -48,6 +48,7 @@ const ERROR_CODES = {
   INTERACTIVE_APPROVAL_JSON: "INTERACTIVE_APPROVAL_JSON",
   INTERACTIVE_APPROVAL_TTY: "INTERACTIVE_APPROVAL_TTY",
   TOOLS_NOT_SUPPORTED: "TOOLS_NOT_SUPPORTED",
+  INVALID_OPTION: "INVALID_OPTION",
   RUNTIME_ERROR: "RUNTIME_ERROR",
   FETCH_TIMEOUT: "FETCH_TIMEOUT",
   RETRY_EXHAUSTED: "RETRY_EXHAUSTED",
@@ -455,7 +456,7 @@ function printHelp() {
     "  --image <path>         Attach image file (repeatable)",
     "  --yes                  Alias for --approval auto",
     "  --stats [N]            Show usage stats (all models or top N)",
-    "  --unsafe               Force unsafe mode (critical deny rules still apply)",
+    "  --unsafe               Force framework profile (critical deny rules still apply)",
     "  -V, --version          Show version",
     "  -h, --help             Show help",
     "",
@@ -2183,6 +2184,38 @@ function getEffectiveToolsMode(opts, agentConfig) {
   return "auto";
 }
 
+function validateRuntimeOptionOverrides(opts) {
+  const profileRaw = opts && typeof opts.profile === "string" ? opts.profile.trim() : "";
+  if (profileRaw) {
+    const parsed = parseProfileValue(profileRaw);
+    if (!parsed) {
+      const e = new Error(`Invalid --profile value '${profileRaw}'. Allowed values: safe, dev, framework.`);
+      e.code = ERROR_CODES.INVALID_OPTION;
+      throw e;
+    }
+  }
+
+  const approvalRaw = opts && typeof opts.approval === "string" ? opts.approval.trim() : "";
+  if (approvalRaw) {
+    const v = approvalRaw.toLowerCase();
+    if (v !== "ask" && v !== "auto" && v !== "never") {
+      const e = new Error(`Invalid --approval value '${approvalRaw}'. Allowed values: ask, auto, never.`);
+      e.code = ERROR_CODES.INVALID_OPTION;
+      throw e;
+    }
+  }
+
+  const toolsRaw = opts && typeof opts.tools === "string" ? opts.tools.trim() : "";
+  if (toolsRaw) {
+    const v = toolsRaw.toLowerCase();
+    if (v !== "auto" && v !== "on" && v !== "off") {
+      const e = new Error(`Invalid --tools value '${toolsRaw}'. Allowed values: auto, on, off.`);
+      e.code = ERROR_CODES.INVALID_OPTION;
+      throw e;
+    }
+  }
+}
+
 function isToolUnsupportedError(err) {
   const msg = err && err.message ? String(err.message).toLowerCase() : "";
   return (
@@ -2445,7 +2478,7 @@ async function runCommandTool(args, options, agentConfig) {
         source: decision.source,
         rule: decision.rule,
       },
-      error: `BLOCKED: Command not allowed in mode '${decision.mode}': ${cmd}`,
+      error: `BLOCKED: Command not allowed for profile '${decision.mode}': ${cmd}`,
     };
   }
 
@@ -2927,6 +2960,8 @@ async function main() {
     }
     process.exit(1);
   }
+
+  validateRuntimeOptionOverrides(opts);
 
   let agentConfig = null;
   let providerConfig = null;
@@ -3428,6 +3463,7 @@ module.exports = {
   getEffectiveMode,
   getEffectiveApprovalMode,
   getEffectiveToolsMode,
+  validateRuntimeOptionOverrides,
   isToolUnsupportedError,
   modelLikelySupportsVision,
   isVisionUnsupportedError,

@@ -248,7 +248,7 @@ else:
   "ok": false,
   "result": null,
   "error": {
-    "message": "BLOCKED: Command not allowed in mode 'build': rm -rf /",
+    "message": "BLOCKED: Command not allowed for profile 'dev': rm -rf /",
     "code": "TOOL_EXECUTION_ERROR"
   },
   "meta": { "duration_ms": 3, "ts": "2026-02-15T12:00:01.000Z" }
@@ -303,7 +303,7 @@ Common tool error codes in normalized tool-call records:
 - `provider` (`string`) -- Provider used for the request
 - `model` (`string`) -- Full model identifier (`provider/model`)
 - `profile` (`string`) -- Effective runtime profile (`safe|dev|framework`)
-- `mode` (`string`) -- Security mode that was active
+- `mode` (`string`) -- Effective policy key (same value set as profile: `safe|dev|framework`)
 - `approvalMode` (`string`) -- Approval mode that was active
 - `toolsMode` (`string`) -- Tools mode that was configured
 - `toolsEnabled` (`boolean`) -- Whether tools were actually sent to the model

@@ -93,13 +93,13 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 
 ### security
 
-- `denyCritical` (`string[]`) -- Befehle die immer blockiert werden, unabhaengig vom Modus. Unterstuetzt Klartext-Matching und Regex via `re:`-Prefix.
-- `modes` (`object`) -- Modusspezifische Allow/Deny-Regelsets.
+- `denyCritical` (`string[]`) -- Befehle die immer blockiert werden, unabhaengig vom Profil. Unterstuetzt Klartext-Matching und Regex via `re:`-Prefix.
+- `modes` (`object`) -- Profilspezifische Allow/Deny-Regelsets (`safe`, `dev`, `framework`).
 
-### security.modes.<mode>
+### security.modes.<profile>
 
-- `allow` (`string[]`) -- In diesem Modus erlaubte Befehle. `"*"` fuer alle verwenden.
-- `deny` (`string[]`) -- In diesem Modus blockierte Befehle.
+- `allow` (`string[]`) -- In diesem Profil erlaubte Befehle. `"*"` fuer alle verwenden.
+- `deny` (`string[]`) -- In diesem Profil blockierte Befehle.
 
 ### Regel-Matching
 
@@ -112,8 +112,8 @@ Regeln werden gegen den vollstaendigen Befehlsstring gematcht:
 ### Entscheidungsreihenfolge
 
 1. `denyCritical` -- wird zuerst geprueft, gewinnt immer
-2. `modes[mode].deny` -- wird als zweites geprueft
-3. `modes[mode].allow` -- wird zuletzt geprueft, Befehl muss mindestens eine Allow-Regel matchen
+2. `modes[profile].deny` -- wird als zweites geprueft
+3. `modes[profile].allow` -- wird zuletzt geprueft, Befehl muss mindestens eine Allow-Regel matchen
 
 Wenn ein Befehl `denyCritical` oder `deny` matcht, wird er blockiert. Wenn er keine `allow`-Regel matcht, wird er ebenfalls blockiert.
 

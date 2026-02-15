@@ -41,6 +41,7 @@ const {
   getEffectiveProfile,
   getEffectiveApprovalMode,
   getEffectiveToolsMode,
+  validateRuntimeOptionOverrides,
   isToolUnsupportedError,
   modelLikelySupportsVision,
   isVisionUnsupportedError,
@@ -101,6 +102,7 @@ describe("ERROR_CODES", () => {
       "INTERACTIVE_APPROVAL_JSON",
       "INTERACTIVE_APPROVAL_TTY",
       "TOOLS_NOT_SUPPORTED",
+      "INVALID_OPTION",
       "RUNTIME_ERROR",
       "FETCH_TIMEOUT",
       "RETRY_EXHAUSTED",
@@ -679,6 +681,47 @@ describe("getEffectiveToolsMode", () => {
 
   it("returns auto for invalid values", () => {
     assert.equal(getEffectiveToolsMode({ tools: "maybe" }, null), "auto");
+  });
+});
+
+describe("validateRuntimeOptionOverrides", () => {
+  it("accepts valid values", () => {
+    assert.doesNotThrow(() =>
+      validateRuntimeOptionOverrides({ profile: "dev", approval: "AUTO", tools: "On" })
+    );
+  });
+
+  it("throws for invalid profile", () => {
+    assert.throws(
+      () => validateRuntimeOptionOverrides({ profile: "banana", approval: "", tools: "" }),
+      (err) => {
+        assert.equal(err.code, ERROR_CODES.INVALID_OPTION);
+        assert.match(err.message, /Invalid --profile value/);
+        return true;
+      }
+    );
+  });
+
+  it("throws for invalid approval", () => {
+    assert.throws(
+      () => validateRuntimeOptionOverrides({ profile: "", approval: "always", tools: "" }),
+      (err) => {
+        assert.equal(err.code, ERROR_CODES.INVALID_OPTION);
+        assert.match(err.message, /Invalid --approval value/);
+        return true;
+      }
+    );
+  });
+
+  it("throws for invalid tools", () => {
+    assert.throws(
+      () => validateRuntimeOptionOverrides({ profile: "", approval: "", tools: "maybe" }),
+      (err) => {
+        assert.equal(err.code, ERROR_CODES.INVALID_OPTION);
+        assert.match(err.message, /Invalid --tools value/);
+        return true;
+      }
+    );
   });
 });
 

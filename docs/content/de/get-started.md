@@ -123,11 +123,11 @@ Das erzeugt eine agentische Schleife, in der die KI:
 
 Die Schleife laeuft fuer bis zu 5 Runden, bevor der Agent eine finale Textantwort erzwingt.
 
-### Sicherheitsmodi
+### Sicherheitsprofile
 
 Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine dreischichtige Sicherheitsrichtlinie in `agent.json` geprueft:
 
-**Schicht 1: denyCritical** -- blockiert immer katastrophale Befehle, unabhaengig vom Modus:
+**Schicht 1: denyCritical** -- blockiert immer katastrophale Befehle, unabhaengig vom Profil:
 
 - `rm -rf /`
 - `mkfs`
@@ -135,23 +135,23 @@ Jeder Befehl, den die KI ausfuehren moechte, wird gegen eine dreischichtige Sich
 - `dd if=`
 - Pipen von curl/wget in sh/bash
 
-**Schicht 2: Modusspezifische Deny-Regeln** -- blockiert Befehle basierend auf dem aktuellen Modus.
+**Schicht 2: Profilspezifische Deny-Regeln** -- blockiert Befehle basierend auf dem aktuellen Profil.
 
-**Schicht 3: Modusspezifische Allow-Regeln** -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.
+**Schicht 3: Profilspezifische Allow-Regeln** -- nur explizit erlaubte Befehle koennen ausgefuehrt werden.
 
 Auswertungsreihenfolge: denyCritical -> deny -> allow. Ein Befehl muss alle drei Schichten bestehen.
 
-Die drei Modi:
+Die drei Profile:
 
-- **plan** -- Nur-Lesen-Erkundung. Nur `ls`, `pwd`, `git status`, `git log`, `node -v`, `npm -v` erlaubt. Destruktive Befehle, Paketinstallationen und Pushes sind blockiert.
-- **build** (Standard) -- Normale Entwicklung. Git, Node.js, npm, Python, Docker, Make sind erlaubt. `rm`, `sudo` und System-Level-Befehle sind blockiert.
-- **unsafe** -- Breiter Umfang. Alle Befehle erlaubt ausser `denyCritical`-Eintraege. Mit Vorsicht verwenden.
+- **safe** -- Konservativer Befehlsumfang. Lese-/Erkundungsbefehle sind erlaubt; destruktive Befehle, Paketinstallationen und Pushes bleiben blockiert.
+- **dev** (Standard) -- Normale Entwicklungs-Defaults. Git/Node/npm/Python/Docker-Workflows sind erlaubt; kritische/destruktive Befehle bleiben blockiert.
+- **framework** -- Breiter Umfang. Die meisten Befehle sind erlaubt, ausser `denyCritical`-Eintraege. Mit Vorsicht verwenden.
 
 ### Freigabemodi (Approval)
 
 Steuert das Human-in-the-Loop-Verhalten fuer die Befehlsausfuehrung:
 
-- **ask** (Standard) -- Der Agent fragt vor jedem Befehl: `Approve? [y/N]`. Erfordert ein TTY-Terminal. Das ist der sicherste Modus fuer interaktive Nutzung.
+- **ask** (Standard) -- Der Agent fragt vor jedem Befehl: `Approve? [y/N]`. Erfordert ein TTY-Terminal. Das ist die sicherste Einstellung fuer interaktive Nutzung.
 - **auto** -- Fuehrt richtlinienkonforme Befehle sofort ohne Nachfrage aus. Erforderlich fuer CI/CD und Scripting. Mit `--json` fuer Automation verwenden.
 - **never** -- Blockiert jede Befehlsausfuehrung. Die KI kann nur mit Text antworten, nie Befehle ausfuehren.
 
@@ -229,7 +229,7 @@ node agent.js -m "Erklaere diesen Fehler" --model groq/llama-3.3-70b-versatile -
 # Suche-basierte Antworten
 node agent.js -m "Neueste Node.js Security-Patches?" --model perplexity/sonar --no-tools
 
-# Voller Agent-Modus
+# Voller Agent-Workflow
 node agent.js -m "Behebe den fehlschlagenden Test" --model openai/gpt-4.1 --approval auto
 ```
 
@@ -264,7 +264,7 @@ Optionen:
   --yes                  Alias fuer --approval auto
   --stats [N]            Usage-Statistiken anzeigen (alle Modelle oder Top N)
   --json-schema          JSON-Schema fuer --json-Output ausgeben
-  --unsafe               Unsafe-Modus erzwingen
+  --unsafe               Framework-Profil erzwingen
   --log                  Fehler-Logging aktivieren
   --log-file <pfad>      Standard: ./agent.js.log
   --verbose              Zusaetzliche Laufzeitdiagnostik

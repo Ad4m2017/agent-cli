@@ -127,9 +127,9 @@ Every command the AI wants to run is checked against a security policy defined i
 
 You can select a profile via `--profile` or `runtime.profile` in `agent.json`.
 
-Regardless of mode, a `denyCritical` list always blocks catastrophic commands like `rm -rf /`, `mkfs`, and piping curl/wget into shell.
+Regardless of profile, a `denyCritical` list always blocks catastrophic commands like `rm -rf /`, `mkfs`, and piping curl/wget into shell.
 
-Policy evaluation order: `denyCritical` -> `mode.deny` -> `mode.allow`.
+Policy evaluation order: `denyCritical` -> `modes[profile].deny` -> `modes[profile].allow`.
 
 ### Approval Modes
 
@@ -180,8 +180,8 @@ Options:
   --json                 Output structured JSON with tool call details
   --json-schema          Print JSON schema for --json output
   --profile <name>       Runtime profile: safe, dev, framework
-  --approval <name>      Approval mode: ask, auto, never
-  --tools <name>         Tools mode: auto, on, off
+  --approval <name>      Approval setting: ask, auto, never
+  --tools <name>         Tools setting: auto, on, off
   --no-tools             Alias for --tools off
   --file <path>          Attach a text/code file as context (repeatable)
   --image <path>         Attach an image file (repeatable)
@@ -192,7 +192,7 @@ Options:
   --max-images <n>       Max number of --image attachments (integer >= 0, 0 = unlimited)
   --yes                  Alias for --approval auto
   --stats [N]            Show usage stats (all models or top N)
-  --unsafe               Force unsafe mode (denyCritical rules still apply)
+  --unsafe               Force framework profile (denyCritical rules still apply)
   --log                  Enable error logging to file
   --log-file <path>      Log file path (default: ./agent.js.log)
   --verbose              Print additional runtime diagnostics

@@ -84,18 +84,18 @@ node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versa
 <p>This creates an agentic loop where the AI can:</p>
 <ul><li>List and read files</li><li>Run tests and linters</li><li>Check git status and history</li><li>Execute build commands</li><li>Inspect running processes</li></ul>
 <p>The loop runs for up to 5 turns before the agent forces a final text response.</p>
-<h3 id="security-modes">Security Modes</h3>
+<h3 id="security-profiles">Security Profiles</h3>
 <p>Every command the AI wants to execute is checked against a three-layer security policy defined in <code>agent.json</code>:</p>
-<p><strong>Layer 1: denyCritical</strong> -- always blocks catastrophic commands regardless of mode:</p>
+<p><strong>Layer 1: denyCritical</strong> -- always blocks catastrophic commands regardless of profile:</p>
 <ul><li><code>rm -rf /</code></li><li><code>mkfs</code></li><li><code>shutdown</code>, <code>reboot</code>, <code>poweroff</code></li><li><code>dd if=</code></li><li>Piping curl/wget into sh/bash</li></ul>
-<p><strong>Layer 2: Mode-specific deny rules</strong> -- blocks commands based on current mode.</p>
-<p><strong>Layer 3: Mode-specific allow rules</strong> -- only explicitly allowed commands can run.</p>
+<p><strong>Layer 2: Profile-specific deny rules</strong> -- blocks commands based on the current profile.</p>
+<p><strong>Layer 3: Profile-specific allow rules</strong> -- only explicitly allowed commands can run.</p>
 <p>Evaluation order: denyCritical -&gt; deny -&gt; allow. A command must pass all three layers.</p>
-<p>The three modes:</p>
-<ul><li><strong>plan</strong> -- Read-only exploration. Only <code>ls</code>, <code>pwd</code>, <code>git status</code>, <code>git log</code>, <code>node -v</code>, <code>npm -v</code> are allowed. Destructive commands, package installs, and pushes are blocked.</li><li><strong>build</strong> (default) -- Normal development. Git, Node.js, npm, Python, Docker, Make are allowed. <code>rm</code>, <code>sudo</code>, and system-level commands are blocked.</li><li><strong>unsafe</strong> -- Broad scope. All commands allowed except <code>denyCritical</code> items. Use with caution.</li></ul>
+<p>The three profiles:</p>
+<ul><li><strong>safe</strong> -- Conservative command scope. Read-style exploration commands are allowed; destructive commands, package installs, and pushes are blocked.</li><li><strong>dev</strong> (default) -- Normal development defaults. Git/Node/npm/Python/Docker-style workflows are allowed while critical/destructive commands are still blocked.</li><li><strong>framework</strong> -- Broad scope. Most commands are allowed except <code>denyCritical</code> items. Use with caution.</li></ul>
 <h3 id="approval-modes">Approval Modes</h3>
 <p>Controls human-in-the-loop behavior for command execution:</p>
-<ul><li><strong>ask</strong> (default) -- The agent prompts you before every command: <code>Approve? [y/N]</code>. Requires a TTY terminal. This is the safest mode for interactive use.</li><li><strong>auto</strong> -- Executes policy-allowed commands immediately without prompting. Required for CI/CD and scripting. Use with <code>--json</code> for automation.</li><li><strong>never</strong> -- Blocks all command execution. The AI can only respond with text, never run commands.</li></ul>
+<ul><li><strong>ask</strong> (default) -- The agent prompts you before every command: <code>Approve? [y/N]</code>. Requires a TTY terminal. This is the safest setting for interactive use.</li><li><strong>auto</strong> -- Executes policy-allowed commands immediately without prompting. Required for CI/CD and scripting. Use with <code>--json</code> for automation.</li><li><strong>never</strong> -- Blocks all command execution. The AI can only respond with text, never run commands.</li></ul>
 <h3 id="tools-modes">Tools Modes</h3>
 <p>Controls whether tool-calling payloads are included in API requests:</p>
 <ul><li><strong>auto</strong> (default) -- Sends tool definitions to the model. If the model rejects them (e.g., Perplexity models), automatically retries without tools.</li><li><strong>on</strong> -- Always sends tool definitions. Returns <code>TOOLS_NOT_SUPPORTED</code> error if the model cannot handle them.</li><li><strong>off</strong> -- Never sends tool definitions. The AI responds with text only.</li></ul>
@@ -124,7 +124,7 @@ node agent.js -m &quot;Explain this error&quot; --model groq/llama-3.3-70b-versa
 # Search-augmented answers
 node agent.js -m &quot;Latest Node.js security patches?&quot; --model perplexity/sonar --no-tools
 
-# Full agent mode
+# Full agent workflow
 node agent.js -m &quot;Fix the failing test&quot; --model openai/gpt-4.1 --approval auto</code></pre>
 <h3 id="json-output-for-scripting">JSON output for scripting</h3>
 <pre><code class="language-bash">node agent.js -m &quot;Run tests&quot; --json --approval auto --profile dev</code></pre>
@@ -151,7 +151,7 @@ Options:
   --yes                  Alias for --approval auto
   --stats [N]            Show usage stats (all models or top N)
   --json-schema          Print JSON schema for --json output
-  --unsafe               Force unsafe mode
+  --unsafe               Force framework profile
   --log                  Enable error logging
   --log-file &lt;path&gt;      Default: ./agent.js.log
   --verbose              Additional runtime diagnostics
@@ -183,7 +183,7 @@ Options:
 <a href="#first-run">First Run</a>
 <a href="#concepts">Concepts</a>
 <a class="sub-item" href="#tool-calling">Tool Calling</a>
-<a class="sub-item" href="#security-modes">Security Modes</a>
+<a class="sub-item" href="#security-profiles">Security Profiles</a>
 <a class="sub-item" href="#approval-modes">Approval Modes</a>
 <a class="sub-item" href="#tools-modes">Tools Modes</a>
 <a class="sub-item" href="#providers">Providers</a>

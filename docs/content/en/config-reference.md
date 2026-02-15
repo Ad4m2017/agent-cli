@@ -93,13 +93,13 @@ This file controls runtime behavior and security policy. It is created with sens
 
 ### security
 
-- `denyCritical` (`string[]`) -- Commands that are always blocked, regardless of mode. Supports plain text matching and regex via `re:` prefix.
-- `modes` (`object`) -- Per-mode allow/deny rule sets.
+- `denyCritical` (`string[]`) -- Commands that are always blocked, regardless of profile. Supports plain text matching and regex via `re:` prefix.
+- `modes` (`object`) -- Per-profile allow/deny rule sets (`safe`, `dev`, `framework`).
 
-### security.modes.<mode>
+### security.modes.<profile>
 
-- `allow` (`string[]`) -- Commands allowed in this mode. Use `"*"` to allow all.
-- `deny` (`string[]`) -- Commands blocked in this mode.
+- `allow` (`string[]`) -- Commands allowed in this profile. Use `"*"` to allow all.
+- `deny` (`string[]`) -- Commands blocked in this profile.
 
 ### Rule Matching
 
@@ -112,8 +112,8 @@ Rules are matched against the full command string:
 ### Decision Order
 
 1. `denyCritical` -- checked first, always wins
-2. `modes[mode].deny` -- checked second
-3. `modes[mode].allow` -- checked last, command must match at least one allow rule
+2. `modes[profile].deny` -- checked second
+3. `modes[profile].allow` -- checked last, command must match at least one allow rule
 
 If a command matches `denyCritical` or `deny`, it is blocked. If it does not match any `allow` rule, it is also blocked.
 

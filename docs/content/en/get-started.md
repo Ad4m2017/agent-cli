@@ -123,11 +123,11 @@ This creates an agentic loop where the AI can:
 
 The loop runs for up to 5 turns before the agent forces a final text response.
 
-### Security Modes
+### Security Profiles
 
 Every command the AI wants to execute is checked against a three-layer security policy defined in `agent.json`:
 
-**Layer 1: denyCritical** -- always blocks catastrophic commands regardless of mode:
+**Layer 1: denyCritical** -- always blocks catastrophic commands regardless of profile:
 
 - `rm -rf /`
 - `mkfs`
@@ -135,23 +135,23 @@ Every command the AI wants to execute is checked against a three-layer security 
 - `dd if=`
 - Piping curl/wget into sh/bash
 
-**Layer 2: Mode-specific deny rules** -- blocks commands based on current mode.
+**Layer 2: Profile-specific deny rules** -- blocks commands based on the current profile.
 
-**Layer 3: Mode-specific allow rules** -- only explicitly allowed commands can run.
+**Layer 3: Profile-specific allow rules** -- only explicitly allowed commands can run.
 
 Evaluation order: denyCritical -> deny -> allow. A command must pass all three layers.
 
-The three modes:
+The three profiles:
 
-- **plan** -- Read-only exploration. Only `ls`, `pwd`, `git status`, `git log`, `node -v`, `npm -v` are allowed. Destructive commands, package installs, and pushes are blocked.
-- **build** (default) -- Normal development. Git, Node.js, npm, Python, Docker, Make are allowed. `rm`, `sudo`, and system-level commands are blocked.
-- **unsafe** -- Broad scope. All commands allowed except `denyCritical` items. Use with caution.
+- **safe** -- Conservative command scope. Read-style exploration commands are allowed; destructive commands, package installs, and pushes are blocked.
+- **dev** (default) -- Normal development defaults. Git/Node/npm/Python/Docker-style workflows are allowed while critical/destructive commands are still blocked.
+- **framework** -- Broad scope. Most commands are allowed except `denyCritical` items. Use with caution.
 
 ### Approval Modes
 
 Controls human-in-the-loop behavior for command execution:
 
-- **ask** (default) -- The agent prompts you before every command: `Approve? [y/N]`. Requires a TTY terminal. This is the safest mode for interactive use.
+- **ask** (default) -- The agent prompts you before every command: `Approve? [y/N]`. Requires a TTY terminal. This is the safest setting for interactive use.
 - **auto** -- Executes policy-allowed commands immediately without prompting. Required for CI/CD and scripting. Use with `--json` for automation.
 - **never** -- Blocks all command execution. The AI can only respond with text, never run commands.
 
@@ -229,7 +229,7 @@ node agent.js -m "Explain this error" --model groq/llama-3.3-70b-versatile --no-
 # Search-augmented answers
 node agent.js -m "Latest Node.js security patches?" --model perplexity/sonar --no-tools
 
-# Full agent mode
+# Full agent workflow
 node agent.js -m "Fix the failing test" --model openai/gpt-4.1 --approval auto
 ```
 
@@ -264,7 +264,7 @@ Options:
   --yes                  Alias for --approval auto
   --stats [N]            Show usage stats (all models or top N)
   --json-schema          Print JSON schema for --json output
-  --unsafe               Force unsafe mode
+  --unsafe               Force framework profile
   --log                  Enable error logging
   --log-file <path>      Default: ./agent.js.log
   --verbose              Additional runtime diagnostics
