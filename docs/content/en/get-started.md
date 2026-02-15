@@ -211,7 +211,7 @@ node agent.js -m "What does this project do? Summarize the architecture."
 ### Run tests and analyze failures
 
 ```bash
-node agent.js -m "Run npm test and explain any failures" --approval auto --mode build
+node agent.js -m "Run npm test and explain any failures" --approval auto --profile dev
 ```
 
 ### Review a specific file
@@ -236,7 +236,7 @@ node agent.js -m "Fix the failing test" --model openai/gpt-4.1 --approval auto
 ### JSON output for scripting
 
 ```bash
-node agent.js -m "Run tests" --json --approval auto --mode build
+node agent.js -m "Run tests" --json --approval auto --profile dev
 ```
 
 ## CLI Reference

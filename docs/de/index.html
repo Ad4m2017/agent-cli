@@ -113,7 +113,7 @@ node agent.js -m &quot;Vergleiche diese&quot; --file a.js --file b.js</code></pr
 <h3 id="codebase-erkunden">Codebase erkunden</h3>
 <pre><code class="language-bash">node agent.js -m &quot;Was macht dieses Projekt? Fasse die Architektur zusammen.&quot;</code></pre>
 <h3 id="tests-ausfuehren-und-fehler-analysieren">Tests ausfuehren und Fehler analysieren</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Fuehre npm test aus und erklaere eventuelle Fehler&quot; --approval auto --mode build</code></pre>
+<pre><code class="language-bash">node agent.js -m &quot;Fuehre npm test aus und erklaere eventuelle Fehler&quot; --approval auto --profile dev</code></pre>
 <h3 id="bestimmte-datei-reviewen">Bestimmte Datei reviewen</h3>
 <pre><code class="language-bash">node agent.js -m &quot;Pruefe diese Datei auf Bugs&quot; --file src/utils.js --no-tools</code></pre>
 <h3 id="verschiedene-provider-fuer-verschiedene-aufgaben">Verschiedene Provider fuer verschiedene Aufgaben</h3>
@@ -126,7 +126,7 @@ node agent.js -m &quot;Neueste Node.js Security-Patches?&quot; --model perplexit
 # Voller Agent-Modus
 node agent.js -m &quot;Behebe den fehlschlagenden Test&quot; --model openai/gpt-4.1 --approval auto</code></pre>
 <h3 id="json-ausgabe-fuer-scripting">JSON-Ausgabe fuer Scripting</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Tests ausfuehren&quot; --json --approval auto --mode build</code></pre>
+<pre><code class="language-bash">node agent.js -m &quot;Tests ausfuehren&quot; --json --approval auto --profile dev</code></pre>
 <h2 id="cli-referenz">CLI-Referenz</h2>
 <pre><code class="language-text">node agent.js -m &quot;nachricht&quot; [optionen]
 

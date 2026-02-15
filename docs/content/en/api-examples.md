@@ -16,7 +16,7 @@ Use these examples to integrate agent-cli into automation workflows, CI pipeline
 ```bash
 set -euo pipefail
 
-OUT=$(node agent.js -m "Run tests and summarize" --json --approval auto --mode build)
+OUT=$(node agent.js -m "Run tests and summarize" --json --approval auto --profile dev)
 echo "$OUT"
 ```
 
@@ -25,7 +25,7 @@ echo "$OUT"
 ```bash
 set -euo pipefail
 
-OUT=$(node agent.js -m "Run npm test" --json --approval auto --mode build)
+OUT=$(node agent.js -m "Run npm test" --json --approval auto --profile dev)
 OK=$(echo "$OUT" | jq -r '.ok')
 MESSAGE=$(echo "$OUT" | jq -r '.message')
 
@@ -71,7 +71,7 @@ RESULT=$(node agent.js \
   -m "Run lint and tests. Report pass or fail." \
   --json \
   --approval auto \
-  --mode build)
+  --profile dev)
 
 OK=$(echo "$RESULT" | jq -r '.ok')
 TOOLS_USED=$(echo "$RESULT" | jq '.toolCalls | length')
@@ -90,7 +90,7 @@ fi
 ### Basic Usage
 
 ```powershell
-$out = node agent.js -m "Run tests and summarize" --json --approval auto --mode build
+$out = node agent.js -m "Run tests and summarize" --json --approval auto --profile dev
 $obj = $out | ConvertFrom-Json
 
 if ($obj.ok) {
@@ -121,7 +121,7 @@ const raw = execFileSync("node", [
   "-m", "Run lint and summarize",
   "--json",
   "--approval", "auto",
-  "--mode", "build",
+  "--profile", "dev",
 ], { encoding: "utf8" });
 
 const result = JSON.parse(raw);
@@ -143,7 +143,7 @@ async function runAgent(message, options = {}) {
     "-m", message,
     "--json",
     "--approval", options.approval || "auto",
-    "--mode", options.mode || "build",
+    "--profile", options.profile || "dev",
   ];
 
   if (options.model) {
@@ -163,7 +163,7 @@ async function runAgent(message, options = {}) {
 }
 
 // Usage
-const result = await runAgent("Run tests", { mode: "build" });
+const result = await runAgent("Run tests", { profile: "dev" });
 console.log(result.ok, result.message);
 ```
 
@@ -196,6 +196,7 @@ else:
   "ok": true,
   "provider": "copilot",
   "model": "copilot/gpt-4o",
+  "profile": "dev",
   "mode": "build",
   "approvalMode": "auto",
   "toolsMode": "auto",
@@ -205,12 +206,23 @@ else:
     "files": [],
     "images": []
   },
+  "usage": {
+    "turns": 2,
+    "turns_with_usage": 2,
+    "has_usage": true,
+    "input_tokens": 1200,
+    "output_tokens": 240,
+    "total_tokens": 1440
+  },
   "message": "All 42 tests passed successfully.",
   "toolCalls": [
     {
-      "name": "run_command",
-      "args": { "cmd": "npm test" },
-      "result": { "ok": true, "cmd": "npm test", "stdout": "...", "stderr": "" }
+      "tool": "run_command",
+      "input": { "cmd": "npm test" },
+      "ok": true,
+      "result": { "ok": true, "cmd": "npm test", "stdout": "...", "stderr": "" },
+      "error": null,
+      "meta": { "duration_ms": 1180, "ts": "2026-02-15T12:00:00.000Z" }
     }
   ],
   "timingMs": 3200
@@ -231,15 +243,15 @@ else:
 
 ```json
 {
-  "name": "run_command",
-  "args": { "cmd": "rm -rf /" },
-  "result": {
-    "ok": false,
-    "blocked": true,
-    "mode": "build",
-    "policy": { "source": "denyCritical", "rule": "rm -rf /" },
-    "error": "BLOCKED: Command not allowed in mode 'build': rm -rf /"
-  }
+  "tool": "run_command",
+  "input": { "cmd": "rm -rf /" },
+  "ok": false,
+  "result": null,
+  "error": {
+    "message": "BLOCKED: Command not allowed in mode 'build': rm -rf /",
+    "code": ""
+  },
+  "meta": { "duration_ms": 3, "ts": "2026-02-15T12:00:01.000Z" }
 }
 ```
 
@@ -248,14 +260,16 @@ else:
 - `ok` (`boolean`) -- Whether the request completed successfully
 - `provider` (`string`) -- Provider used for the request
 - `model` (`string`) -- Full model identifier (`provider/model`)
+- `profile` (`string`) -- Effective runtime profile (`safe|dev|framework`)
 - `mode` (`string`) -- Security mode that was active
 - `approvalMode` (`string`) -- Approval mode that was active
 - `toolsMode` (`string`) -- Tools mode that was configured
 - `toolsEnabled` (`boolean`) -- Whether tools were actually sent to the model
 - `toolsFallbackUsed` (`boolean`) -- Whether auto-mode fell back to no-tools
 - `attachments` (`object`) -- Files and images that were attached
+- `usage` (`object`) -- Aggregated usage for this run (`turns`, `input_tokens`, `output_tokens`, `total_tokens`, ...)
 - `message` (`string`) -- Final text response from the AI
-- `toolCalls` (`array`) -- All tool calls made during the session
+- `toolCalls` (`array`) -- Normalized tool call records (`tool`, `input`, `ok`, `result`, `error`, `meta`)
 - `timingMs` (`number`) -- Total execution time in milliseconds
 - `error` (`string`) -- Error message (only when `ok` is false)
 - `code` (`string`) -- Error code (only when `ok` is false)

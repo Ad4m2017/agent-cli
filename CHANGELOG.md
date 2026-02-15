@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.6] - 2026-02-15
+
+### Added
+- Added JSON tool-call normalization (`tool`, `input`, `ok`, `result`, `error`, `meta`) for consistent automation parsing.
+- Added profile-resolution metadata in JSON output via optional `legacyModeMappedFrom` when legacy mode aliases are used.
+
+### Changed
+- Hardened file tool write path with atomic text writes.
+- Hardened `apply_patch` with stricter operation validation and prechecks for `add`/`update` semantics.
+- Refined runtime profile precedence (`--profile`/`AGENT_PROFILE`/config first, legacy `--mode` as fallback mapping).
+- Updated README/docs examples to use profile-first CLI usage (`--profile dev`) and documented normalized JSON contracts.
+- Bumped versions from `1.3.5` to `1.3.6` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.3.5] - 2026-02-15
 
 ### Added

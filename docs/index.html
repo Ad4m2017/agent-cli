@@ -113,7 +113,7 @@ node agent.js -m &quot;Compare these&quot; --file a.js --file b.js</code></pre>
 <h3 id="explore-a-codebase">Explore a codebase</h3>
 <pre><code class="language-bash">node agent.js -m &quot;What does this project do? Summarize the architecture.&quot;</code></pre>
 <h3 id="run-tests-and-analyze-failures">Run tests and analyze failures</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Run npm test and explain any failures&quot; --approval auto --mode build</code></pre>
+<pre><code class="language-bash">node agent.js -m &quot;Run npm test and explain any failures&quot; --approval auto --profile dev</code></pre>
 <h3 id="review-a-specific-file">Review a specific file</h3>
 <pre><code class="language-bash">node agent.js -m &quot;Review this file for bugs&quot; --file src/utils.js --no-tools</code></pre>
 <h3 id="use-different-providers-for-different-tasks">Use different providers for different tasks</h3>
@@ -126,7 +126,7 @@ node agent.js -m &quot;Latest Node.js security patches?&quot; --model perplexity
 # Full agent mode
 node agent.js -m &quot;Fix the failing test&quot; --model openai/gpt-4.1 --approval auto</code></pre>
 <h3 id="json-output-for-scripting">JSON output for scripting</h3>
-<pre><code class="language-bash">node agent.js -m &quot;Run tests&quot; --json --approval auto --mode build</code></pre>
+<pre><code class="language-bash">node agent.js -m &quot;Run tests&quot; --json --approval auto --profile dev</code></pre>
 <h2 id="cli-reference">CLI Reference</h2>
 <pre><code class="language-text">node agent.js -m &quot;message&quot; [options]
 

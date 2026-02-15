@@ -78,7 +78,7 @@ node agent-connect.js
 
 The interactive wizard lets you pick a provider, enter your API key, and set defaults. In TTY terminals, use arrow keys + Enter to navigate menus.
 
-Wizard highlights in `v1.3.5`:
+Wizard highlights in `v1.3.6`:
 - Provider status labels (`installed`, `installed, default`, `not configured`)
 - Quick action `Set default provider/model only` (no full reconfiguration needed)
 - Optional model refresh from live `/models` with fallback to `models.dev`
@@ -261,7 +261,7 @@ node agent.js -m "What does this project do? Summarize the architecture."
 ### Run tests and analyze failures
 
 ```bash
-node agent.js -m "Run npm test and explain any failures" --approval auto --mode build
+node agent.js -m "Run npm test and explain any failures" --approval auto --profile dev
 ```
 
 ### Review a file
@@ -279,7 +279,7 @@ node agent.js -m "What does this UI show?" --model openai/gpt-4o --image screens
 ### Automation in CI
 
 ```bash
-OUT=$(node agent.js -m "Run lint and tests, report status" --json --approval auto --mode build)
+OUT=$(node agent.js -m "Run lint and tests, report status" --json --approval auto --profile dev)
 echo "$OUT" | jq '.ok'
 ```
 
@@ -345,7 +345,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `1.3.5` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `1.3.6` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
