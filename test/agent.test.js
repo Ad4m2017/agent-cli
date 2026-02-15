@@ -49,6 +49,10 @@ const {
   parseNonNegativeInt,
   resolveAttachmentLimits,
   resolveSystemPrompt,
+  resolveUsageStatsConfig,
+  extractUsageStatsFromCompletion,
+  buildUsageStatsReport,
+  compactUsageStatsEntries,
   parseDateMs,
   formatIsoFromSeconds,
   isTokenStillValid,
@@ -127,6 +131,7 @@ describe("parseCliArgs", () => {
     assert.deepEqual(opts.files, []);
     assert.deepEqual(opts.images, []);
     assert.equal(opts.yes, false);
+    assert.equal(opts.stats, false);
     assert.equal(opts.help, false);
     assert.equal(opts.version, false);
   });
@@ -213,6 +218,11 @@ describe("parseCliArgs", () => {
     assert.equal(opts.approval, "auto");
   });
 
+  it("parses --stats", () => {
+    const opts = parseCliArgs(["--stats"]);
+    assert.equal(opts.stats, true);
+  });
+
   it("parses --file and --image (repeatable)", () => {
     const opts = parseCliArgs(["--file", "a.js", "--file", "b.ts", "--image", "pic.png"]);
     assert.deepEqual(opts.files, ["a.js", "b.ts"]);
@@ -255,6 +265,10 @@ describe("defaultAgentConfig", () => {
     assert.equal(cfg.runtime.defaultToolsMode, "auto");
     assert.equal(cfg.runtime.commandTimeoutMs, 10000);
     assert.equal(cfg.runtime.allowInsecureHttp, false);
+    assert.equal(cfg.runtime.usageStats.enabled, false);
+    assert.equal(cfg.runtime.usageStats.file, ".agent-usage.ndjson");
+    assert.equal(cfg.runtime.usageStats.retentionDays, 90);
+    assert.equal(cfg.runtime.usageStats.maxBytes, 5 * 1024 * 1024);
   });
 
   it("returns fresh object each call (no shared reference)", () => {
@@ -1446,6 +1460,100 @@ describe("resolveSystemPrompt", () => {
   it("uses config systemPrompt when CLI did not set one", () => {
     const cfg = { runtime: { systemPrompt: "from config" } };
     assert.equal(resolveSystemPrompt({ systemPromptSet: false, systemPrompt: "" }, cfg), "from config");
+  });
+});
+
+describe("resolveUsageStatsConfig", () => {
+  it("returns defaults when config is missing", () => {
+    const cfg = resolveUsageStatsConfig(null);
+    assert.equal(cfg.enabled, false);
+    assert.equal(path.basename(cfg.filePath), ".agent-usage.ndjson");
+    assert.equal(cfg.retentionDays, 90);
+    assert.equal(cfg.maxBytes, 5 * 1024 * 1024);
+  });
+
+  it("reads runtime.usageStats values", () => {
+    const cfg = resolveUsageStatsConfig({
+      runtime: {
+        usageStats: {
+          enabled: true,
+          file: "./custom.ndjson",
+          retentionDays: 30,
+          maxBytes: 2048,
+        },
+      },
+    });
+    assert.equal(cfg.enabled, true);
+    assert.equal(path.basename(cfg.filePath), "custom.ndjson");
+    assert.equal(cfg.retentionDays, 30);
+    assert.equal(cfg.maxBytes, 2048);
+  });
+});
+
+describe("extractUsageStatsFromCompletion", () => {
+  it("extracts OpenAI usage fields", () => {
+    const out = extractUsageStatsFromCompletion({
+      usage: {
+        prompt_tokens: 10,
+        completion_tokens: 5,
+        total_tokens: 15,
+      },
+    });
+    assert.deepEqual(out, { hasUsage: true, inputTokens: 10, outputTokens: 5, totalTokens: 15 });
+  });
+
+  it("falls back to input/output tokens", () => {
+    const out = extractUsageStatsFromCompletion({ usage: { input_tokens: 7, output_tokens: 3 } });
+    assert.deepEqual(out, { hasUsage: true, inputTokens: 7, outputTokens: 3, totalTokens: 10 });
+  });
+
+  it("returns hasUsage=false when usage is missing", () => {
+    const out = extractUsageStatsFromCompletion({ choices: [] });
+    assert.deepEqual(out, { hasUsage: false, inputTokens: 0, outputTokens: 0, totalTokens: 0 });
+  });
+});
+
+describe("compactUsageStatsEntries", () => {
+  it("drops entries outside retention window", () => {
+    const now = Date.now();
+    const entries = [
+      { ts: new Date(now - 10 * 24 * 60 * 60 * 1000).toISOString() },
+      { ts: new Date(now).toISOString() },
+    ];
+    const out = compactUsageStatsEntries(entries, { retentionDays: 1, maxBytes: 0 });
+    assert.equal(out.length, 1);
+  });
+});
+
+describe("buildUsageStatsReport", () => {
+  it("aggregates totals and usage-missing counts", () => {
+    const report = buildUsageStatsReport([
+      {
+        provider: "openai",
+        model: "openai/gpt-5-mini",
+        request_count: 1,
+        input_tokens: 10,
+        output_tokens: 5,
+        total_tokens: 15,
+        has_usage: true,
+      },
+      {
+        provider: "openai",
+        model: "openai/gpt-5-mini",
+        request_count: 1,
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+        has_usage: false,
+      },
+    ]);
+
+    assert.equal(report.requests_total, 2);
+    assert.equal(report.requests_with_usage, 1);
+    assert.equal(report.requests_usage_missing, 1);
+    assert.equal(report.total_tokens, 15);
+    assert.equal(report.by_provider.openai.requests_total, 2);
+    assert.equal(report.by_model["openai/gpt-5-mini"].requests_with_usage, 1);
   });
 });
 

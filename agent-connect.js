@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "1.2.1";
+const CONNECT_VERSION = "1.3.0";
 
 /**
  * Centralized error codes.
@@ -881,6 +881,12 @@ function defaultAgentConfig() {
       defaultToolsMode: "auto",
       commandTimeoutMs: 10000,
       allowInsecureHttp: false,
+      usageStats: {
+        enabled: false,
+        file: ".agent-usage.ndjson",
+        retentionDays: 90,
+        maxBytes: 5 * 1024 * 1024,
+      },
     },
     security: {
       mode: "build",

@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.2.1";
+const AGENT_VERSION = "1.3.0";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -225,6 +225,7 @@ function parseCliArgs(argv) {
     files: [],
     images: [],
     yes: false,
+    stats: false,
     help: false,
     version: false,
   };
@@ -380,6 +381,11 @@ function parseCliArgs(argv) {
       continue;
     }
 
+    if (a === "--stats") {
+      opts.stats = true;
+      continue;
+    }
+
     if (a === "-h" || a === "--help") {
       opts.help = true;
       continue;
@@ -425,6 +431,7 @@ function printHelp() {
     "  --file <path>          Attach text/code file (repeatable)",
     "  --image <path>         Attach image file (repeatable)",
     "  --yes                  Alias for --approval auto",
+    "  --stats                Show local usage stats from .agent-usage.ndjson",
     "  --unsafe               Force unsafe mode (critical deny rules still apply)",
     "  -V, --version          Show version",
     "  -h, --help             Show help",
@@ -514,6 +521,12 @@ function defaultAgentConfig() {
       defaultToolsMode: "auto",
       commandTimeoutMs: 10000,
       allowInsecureHttp: false,
+      usageStats: {
+        enabled: false,
+        file: ".agent-usage.ndjson",
+        retentionDays: 90,
+        maxBytes: 5 * 1024 * 1024,
+      },
     },
     security: {
       mode: "build",
@@ -918,6 +931,250 @@ function resolveSystemPrompt(opts, agentConfig) {
   const runtime = agentConfig && agentConfig.runtime && typeof agentConfig.runtime === "object" ? agentConfig.runtime : {};
   if (typeof runtime.systemPrompt === "string") return runtime.systemPrompt;
   return "";
+}
+
+function parseUsageStatsNumber(raw, fallback) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.round(n);
+}
+
+function resolveUsageStatsConfig(agentConfig) {
+  const runtime = agentConfig && agentConfig.runtime && typeof agentConfig.runtime === "object" ? agentConfig.runtime : {};
+  const cfg = runtime && runtime.usageStats && typeof runtime.usageStats === "object" ? runtime.usageStats : {};
+  const rawFile = typeof cfg.file === "string" && cfg.file.trim() ? cfg.file.trim() : ".agent-usage.ndjson";
+  return {
+    enabled: !!cfg.enabled,
+    filePath: toAbsolutePath(rawFile),
+    retentionDays: parseUsageStatsNumber(cfg.retentionDays, 90),
+    maxBytes: parseUsageStatsNumber(cfg.maxBytes, 5 * 1024 * 1024),
+    _dirReady: false,
+  };
+}
+
+function toUsageTokenValue(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n);
+}
+
+function extractUsageStatsFromCompletion(completion) {
+  const usage = completion && completion.usage && typeof completion.usage === "object" ? completion.usage : null;
+  if (!usage) {
+    return {
+      hasUsage: false,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+    };
+  }
+
+  const input = toUsageTokenValue(usage.prompt_tokens != null ? usage.prompt_tokens : usage.input_tokens);
+  const output = toUsageTokenValue(usage.completion_tokens != null ? usage.completion_tokens : usage.output_tokens);
+  const totalRaw = toUsageTokenValue(usage.total_tokens);
+  const total = totalRaw != null ? totalRaw : input != null && output != null ? input + output : null;
+  const hasUsage = input != null || output != null || total != null;
+
+  return {
+    hasUsage,
+    inputTokens: input != null ? input : 0,
+    outputTokens: output != null ? output : 0,
+    totalTokens: total != null ? total : 0,
+  };
+}
+
+function appendUsageStatsEvent(statsConfig, event) {
+  if (!statsConfig || !statsConfig.enabled) return;
+
+  try {
+    if (!statsConfig._dirReady) {
+      fs.mkdirSync(path.dirname(statsConfig.filePath), { recursive: true });
+      statsConfig._dirReady = true;
+    }
+  } catch {
+    return;
+  }
+
+  const line = `${JSON.stringify(event)}\n`;
+  fs.appendFile(statsConfig.filePath, line, "utf8", () => {
+    // best-effort logging only
+  });
+}
+
+function compactUsageStatsEntries(entries, statsConfig) {
+  const retentionMs = Number.isFinite(statsConfig.retentionDays) && statsConfig.retentionDays > 0
+    ? statsConfig.retentionDays * 24 * 60 * 60 * 1000
+    : null;
+  const cutoffMs = retentionMs != null ? Date.now() - retentionMs : null;
+
+  let kept = entries.filter((e) => {
+    if (cutoffMs == null) return true;
+    const t = parseDateMs(e && e.ts ? e.ts : "");
+    if (!t) return false;
+    return t >= cutoffMs;
+  });
+
+  const maxBytes = Number.isFinite(statsConfig.maxBytes) && statsConfig.maxBytes > 0 ? statsConfig.maxBytes : null;
+  if (maxBytes != null) {
+    const lines = kept.map((e) => `${JSON.stringify(e)}\n`);
+    let totalBytes = lines.reduce((sum, line) => sum + Buffer.byteLength(line, "utf8"), 0);
+    if (totalBytes > maxBytes) {
+      const targetBytes = Math.max(Math.floor(maxBytes * 0.7), Math.floor(maxBytes / 2));
+      let start = 0;
+      while (start < lines.length && totalBytes > targetBytes) {
+        totalBytes -= Buffer.byteLength(lines[start], "utf8");
+        start += 1;
+      }
+      kept = kept.slice(start);
+    }
+  }
+
+  return kept;
+}
+
+function writeUsageStatsEntriesAtomic(filePath, entries) {
+  const parent = path.dirname(filePath);
+  const base = path.basename(filePath);
+  const tmpPath = path.join(parent, `.${base}.tmp.${process.pid}.${Date.now()}`);
+  const body = entries.map((e) => JSON.stringify(e)).join("\n");
+  const normalized = body ? `${body}\n` : "";
+  fs.writeFileSync(tmpPath, normalized, "utf8");
+  fs.renameSync(tmpPath, filePath);
+}
+
+function loadAndCompactUsageStats(statsConfig) {
+  if (!statsConfig || !statsConfig.filePath || !fs.existsSync(statsConfig.filePath)) return [];
+  let raw = "";
+  try {
+    raw = fs.readFileSync(statsConfig.filePath, "utf8");
+  } catch {
+    return [];
+  }
+
+  const parsed = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch {
+        return null;
+      }
+    })
+    .filter((e) => e && typeof e === "object");
+
+  const compacted = compactUsageStatsEntries(parsed, statsConfig);
+  if (compacted.length !== parsed.length) {
+    try {
+      fs.mkdirSync(path.dirname(statsConfig.filePath), { recursive: true });
+      writeUsageStatsEntriesAtomic(statsConfig.filePath, compacted);
+    } catch {
+      // keep stats best-effort
+    }
+  }
+
+  return compacted;
+}
+
+function buildUsageStatsReport(entries) {
+  const report = {
+    requests_total: 0,
+    requests_with_usage: 0,
+    requests_usage_missing: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    by_provider: {},
+    by_model: {},
+  };
+
+  for (const e of entries) {
+    const req = Number.isFinite(Number(e.request_count)) && Number(e.request_count) > 0 ? Math.round(Number(e.request_count)) : 1;
+    const provider = typeof e.provider === "string" && e.provider ? e.provider : "unknown";
+    const model = typeof e.model === "string" && e.model ? e.model : "unknown";
+    const hasUsage = !!e.has_usage;
+
+    report.requests_total += req;
+    if (hasUsage) {
+      report.requests_with_usage += req;
+      report.input_tokens += toUsageTokenValue(e.input_tokens) || 0;
+      report.output_tokens += toUsageTokenValue(e.output_tokens) || 0;
+      report.total_tokens += toUsageTokenValue(e.total_tokens) || 0;
+    }
+
+    if (!report.by_provider[provider]) {
+      report.by_provider[provider] = {
+        requests_total: 0,
+        requests_with_usage: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+      };
+    }
+    const p = report.by_provider[provider];
+    p.requests_total += req;
+    if (hasUsage) {
+      p.requests_with_usage += req;
+      p.input_tokens += toUsageTokenValue(e.input_tokens) || 0;
+      p.output_tokens += toUsageTokenValue(e.output_tokens) || 0;
+      p.total_tokens += toUsageTokenValue(e.total_tokens) || 0;
+    }
+
+    if (!report.by_model[model]) {
+      report.by_model[model] = {
+        requests_total: 0,
+        requests_with_usage: 0,
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+      };
+    }
+    const m = report.by_model[model];
+    m.requests_total += req;
+    if (hasUsage) {
+      m.requests_with_usage += req;
+      m.input_tokens += toUsageTokenValue(e.input_tokens) || 0;
+      m.output_tokens += toUsageTokenValue(e.output_tokens) || 0;
+      m.total_tokens += toUsageTokenValue(e.total_tokens) || 0;
+    }
+  }
+
+  report.requests_usage_missing = report.requests_total - report.requests_with_usage;
+  return report;
+}
+
+function formatUsageStatsText(report, statsConfig) {
+  const lines = [
+    "Usage Stats",
+    `- file: ${statsConfig.filePath}`,
+    `- requests_total: ${report.requests_total}`,
+    `- requests_with_usage: ${report.requests_with_usage}`,
+    `- requests_usage_missing: ${report.requests_usage_missing}`,
+    `- input_tokens: ${report.input_tokens}`,
+    `- output_tokens: ${report.output_tokens}`,
+    `- total_tokens: ${report.total_tokens}`,
+  ];
+
+  const providerNames = Object.keys(report.by_provider).sort();
+  if (providerNames.length > 0) {
+    lines.push("", "By Provider");
+    for (const name of providerNames) {
+      const p = report.by_provider[name];
+      lines.push(`- ${name}: requests=${p.requests_total}, with_usage=${p.requests_with_usage}, total_tokens=${p.total_tokens}`);
+    }
+  }
+
+  const modelNames = Object.keys(report.by_model).sort();
+  if (modelNames.length > 0) {
+    lines.push("", "By Model");
+    for (const name of modelNames) {
+      const m = report.by_model[name];
+      lines.push(`- ${name}: requests=${m.requests_total}, with_usage=${m.requests_with_usage}, total_tokens=${m.total_tokens}`);
+    }
+  }
+
+  return `${lines.join("\n")}\n`;
 }
 
 function collectAttachments(opts, limits) {
@@ -1905,6 +2162,29 @@ async function main() {
     process.exit(0);
   }
 
+  if (opts.stats) {
+    let agentConfigForStats = null;
+    try {
+      agentConfigForStats = loadAgentConfig(paths.agentConfigPath);
+    } catch (err) {
+      const e = new Error(`Failed to load ${paths.agentConfigPath}: ${err.message}`);
+      e.code = err && err.code ? err.code : ERROR_CODES.AGENT_CONFIG_ERROR;
+      throw e;
+    }
+
+    const usageStatsConfigForStats = resolveUsageStatsConfig(agentConfigForStats);
+    const entries = loadAndCompactUsageStats(usageStatsConfigForStats);
+    const report = buildUsageStatsReport(entries);
+    if (opts.json) {
+      process.stdout.write(
+        `${JSON.stringify({ ok: true, usageStats: Object.assign({ file: usageStatsConfigForStats.filePath }, report) }, null, 2)}\n`
+      );
+    } else {
+      process.stdout.write(formatUsageStatsText(report, usageStatsConfigForStats));
+    }
+    process.exit(0);
+  }
+
   const stdinText = opts.message ? "" : await readStdinText();
   opts.message = resolveInputMessage(opts, stdinText);
 
@@ -1940,6 +2220,7 @@ async function main() {
 
   const attachmentLimits = resolveAttachmentLimits(opts, agentConfig);
   const systemPrompt = resolveSystemPrompt(opts, agentConfig);
+  const usageStatsConfig = resolveUsageStatsConfig(agentConfig);
 
   const selection = resolveModelSelection(opts, agentConfig, providerConfig);
   logger.verbose(`Model selection: provider='${selection.provider || ""}' model='${selection.model || ""}'`);
@@ -2081,6 +2362,18 @@ async function main() {
       }
       throw err;
     }
+
+    const usageStats = extractUsageStatsFromCompletion(completion);
+    appendUsageStatsEvent(usageStatsConfig, {
+      ts: new Date().toISOString(),
+      provider: runtime.provider,
+      model: `${runtime.provider}/${runtime.model}`,
+      request_count: 1,
+      input_tokens: usageStats.inputTokens,
+      output_tokens: usageStats.outputTokens,
+      total_tokens: usageStats.totalTokens,
+      has_usage: usageStats.hasUsage,
+    });
 
     const msg = completion.choices && completion.choices[0] ? completion.choices[0].message : null;
     if (!msg) {
@@ -2225,6 +2518,12 @@ module.exports = {
   parseNonNegativeInt,
   resolveAttachmentLimits,
   resolveSystemPrompt,
+  resolveUsageStatsConfig,
+  extractUsageStatsFromCompletion,
+  buildUsageStatsReport,
+  compactUsageStatsEntries,
+  loadAndCompactUsageStats,
+  formatUsageStatsText,
   parseDateMs,
   formatIsoFromSeconds,
   isTokenStillValid,

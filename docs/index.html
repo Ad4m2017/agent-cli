@@ -148,6 +148,7 @@ Options:
   --max-files &lt;n&gt;        Integer &gt;= 0, 0 = unlimited
   --max-images &lt;n&gt;       Integer &gt;= 0, 0 = unlimited
   --yes                  Alias for --approval auto
+  --stats                Show local usage stats from .agent-usage.ndjson
   --unsafe               Force unsafe mode
   --log                  Enable error logging
   --log-file &lt;path&gt;      Default: ./agent.js.log
@@ -158,6 +159,7 @@ Options:
   --allow-insecure-http  Allow non-local HTTP provider base URLs
   --help
   --version</code></pre>
+<p>Usage stats are opt-in via <code>runtime.usageStats.enabled=true</code> in <code>agent.json</code>.</p>
 <p>If <code>-m/--message</code> is omitted, the prompt is read from stdin:</p>
 <pre><code class="language-bash">cat prompt.txt | node agent.js --approval auto</code></pre>
 <pre><code class="language-text">node agent-connect.js [--provider &lt;name&gt;] [--config &lt;path&gt;] [--auth-config &lt;path&gt;] [--help] [--version]</code></pre>

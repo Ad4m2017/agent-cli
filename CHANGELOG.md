@@ -4,6 +4,19 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.3.0] - 2026-02-15
+
+### Added
+- Optional local usage stats logging in `agent.js`:
+  - new `runtime.usageStats` config (`enabled`, `file`, `retentionDays`, `maxBytes`)
+  - append-only NDJSON events with timestamp, provider/model, request count, token counts, and `has_usage`
+  - new `--stats` CLI output for aggregated request/token usage
+
+### Changed
+- Usage stats retention/size compaction now runs only in `--stats` mode to keep normal request performance unaffected.
+- Version bumped from `1.2.1` to `1.3.0` in `agent.js`, `agent-connect.js`, and `package.json`.
+- README version labels and CLI reference updated in `README.md` and `README.de.md`.
+
 ## [1.2.1] - 2026-02-14
 
 ### Fixed

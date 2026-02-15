@@ -15,6 +15,12 @@
       "maxImageBytes": 0,
       "maxFiles": 0,
       "maxImages": 0
+    },
+    "usageStats": {
+      "enabled": false,
+      "file": ".agent-usage.ndjson",
+      "retentionDays": 90,
+      "maxBytes": 5242880
     }
   },
   "security": {

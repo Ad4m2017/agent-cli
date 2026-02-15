@@ -86,6 +86,10 @@ This file controls runtime behavior and security policy. It is created with sens
 - `attachments.maxImageBytes` (`number`, optional) -- Max bytes per `--image` attachment. Integer `>= 0`; `0` means unlimited.
 - `attachments.maxFiles` (`number`, optional) -- Max number of `--file` attachments. Integer `>= 0`; `0` means unlimited.
 - `attachments.maxImages` (`number`, optional) -- Max number of `--image` attachments. Integer `>= 0`; `0` means unlimited.
+- `usageStats.enabled` (`boolean`, optional) -- Enables local usage stats logging to NDJSON. Default: `false`.
+- `usageStats.file` (`string`, optional) -- Path to the usage log file. Default: `.agent-usage.ndjson`.
+- `usageStats.retentionDays` (`number`, optional) -- Keep stats entries for this many days. Default: `90`.
+- `usageStats.maxBytes` (`number`, optional) -- Soft max file size; applied during `--stats` compaction. Default: `5242880` (5 MB).
 
 ### security
 
@@ -298,7 +302,7 @@ agent-cli now uses stable process exit codes for automation:
 
 Configuration values are resolved in this order (first wins):
 
-1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`)
+1. CLI flags (`--model`, `--mode`, `--approval`, `--tools`, `--unsafe`, `--system-prompt`, `--max-file-bytes`, `--max-image-bytes`, `--max-files`, `--max-images`, `--stats`)
 2. Environment variables (`AGENT_MODEL`, `AGENT_MODE`, `AGENT_APPROVAL`, `AGENT_API_KEY`, `AGENT_COMMAND_TIMEOUT`, `AGENT_ALLOW_INSECURE_HTTP`, `AGENT_SYSTEM_PROMPT`, `AGENT_MAX_FILE_BYTES`, `AGENT_MAX_IMAGE_BYTES`, `AGENT_MAX_FILES`, `AGENT_MAX_IMAGES`)
 3. `agent.json` runtime defaults
 4. `agent.auth.json` defaults (`defaultProvider`, `defaultModel`)
