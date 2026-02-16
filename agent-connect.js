@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "1.5.3";
+const CONNECT_VERSION = "1.5.4";
 
 /**
  * Centralized error codes.

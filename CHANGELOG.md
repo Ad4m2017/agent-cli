@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.4] - 2026-02-16
+
+### Changed
+- Reduced command-policy hot-path overhead by reusing a pre-normalized command string across allow/deny rule checks.
+- Simplified sync tool-dispatch lookup in the execution loop to reduce per-call branching overhead.
+- Kept behavior unchanged while tightening low-level runtime performance.
+- Bumped versions to `1.5.4` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.3] - 2026-02-15
 
 ### Changed
