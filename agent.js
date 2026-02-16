@@ -2150,10 +2150,10 @@ function tokenizeCommand(input) {
  * - "re:<regex>"   => regex match (case-insensitive)
  * - plain text      => exact or prefix command match
  */
-function matchesPolicyRule(rule, cmd) {
+function matchesPolicyRule(rule, cmd, normalizedCmdOverride) {
   if (!rule || typeof rule !== "string") return false;
   const normalizedRule = rule.trim().toLowerCase();
-  const normalizedCmd = cmd.trim().toLowerCase();
+  const normalizedCmd = typeof normalizedCmdOverride === "string" ? normalizedCmdOverride : String(cmd || "").trim().toLowerCase();
 
   if (normalizedRule === "*") return true;
   if (normalizedRule.startsWith("re:")) {
@@ -2180,21 +2180,22 @@ function evaluateCommandPolicy(cmd, opts, agentConfig) {
 
   const denyCritical = Array.isArray(security.denyCritical) ? security.denyCritical : [];
   const command = String(cmd || "");
+  const normalizedCommand = command.trim().toLowerCase();
   for (const rule of denyCritical) {
-    if (matchesPolicyRule(rule, command)) {
+    if (matchesPolicyRule(rule, command, normalizedCommand)) {
       return { allowed: false, profile, mode, source: "denyCritical", rule };
     }
   }
 
   const deny = Array.isArray(modeConfig.deny) ? modeConfig.deny : [];
   for (const rule of deny) {
-    if (matchesPolicyRule(rule, command)) {
+    if (matchesPolicyRule(rule, command, normalizedCommand)) {
       return { allowed: false, profile, mode, source: "deny", rule };
     }
   }
 
   const allow = Array.isArray(modeConfig.allow) ? modeConfig.allow : [];
-  const isAllowed = allow.some((rule) => matchesPolicyRule(rule, command));
+  const isAllowed = allow.some((rule) => matchesPolicyRule(rule, command, normalizedCommand));
   if (!isAllowed) {
     return { allowed: false, profile, mode, source: "allow", rule: "no allow rule matched" };
   }
@@ -3448,9 +3449,7 @@ async function main() {
 
       let result;
       const toolStart = Date.now();
-      const syncExecutor = Object.prototype.hasOwnProperty.call(SYNC_TOOL_EXECUTORS, name)
-        ? SYNC_TOOL_EXECUTORS[name]
-        : null;
+      const syncExecutor = SYNC_TOOL_EXECUTORS[name] || null;
       if (syncExecutor) {
         result = syncExecutor(args);
       } else if (name === "run_command") {
