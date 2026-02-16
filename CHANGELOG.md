@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.5] - 2026-02-16
+
+### Changed
+- Added configurable tool-turn limits via `runtime.maxToolTurns` (default `10`) in `agent.json` and `agent.example.json`.
+- Replaced the hardcoded tool-turn limit with validated runtime resolution (`1..200` clamp, invalid values fall back to default `10`).
+- Updated connect defaults, unit tests, and config reference docs (EN/DE + generated HTML) for `maxToolTurns`.
+- Bumped versions to `1.5.5` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.4] - 2026-02-16
 
 ### Changed

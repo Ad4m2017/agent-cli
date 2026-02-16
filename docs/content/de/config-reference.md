@@ -39,7 +39,8 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
     "defaultModel": "openai/gpt-4.1-mini",
     "profile": "dev",
     "defaultApprovalMode": "ask",
-    "defaultToolsMode": "auto"
+    "defaultToolsMode": "auto",
+    "maxToolTurns": 10
   },
   "security": {
     "denyCritical": [
@@ -77,6 +78,7 @@ Diese Datei steuert Runtime-Verhalten und Sicherheitsrichtlinie. Sie wird mit si
 - `profile` (`string`: `"safe"`, `"dev"`, `"framework"`) -- Runtime-Profil. Standard: `"dev"`.
 - `defaultApprovalMode` (`string`: `"ask"`, `"auto"`, `"never"`) -- Freigabemodus wenn `--approval` nicht uebergeben wird. Standard: `"ask"`.
 - `defaultToolsMode` (`string`: `"auto"`, `"on"`, `"off"`) -- Tools-Modus wenn `--tools` nicht uebergeben wird. Standard: `"auto"`.
+- `maxToolTurns` (`number`) -- Maximale Anzahl Assistant->Tool-Runden pro Anfrage. Integer wird auf `1..200` begrenzt. Standard: `10`.
 - `commandTimeoutMs` (`number`) -- Timeout fuer Tool-Command-Ausfuehrung (`run_command`) in Millisekunden. Standard: `10000`.
 - `allowInsecureHttp` (`boolean`) -- Erlaubt nicht-lokale `http://` Provider-Base-URLs wenn true. Standard: `false`.
 - `approvalTimeoutMs` (`number`, optional) -- Timeout in Millisekunden fuer die interaktive Freigabe-Abfrage. 0 oder weggelassen bedeutet kein Timeout.

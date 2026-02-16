@@ -56,6 +56,7 @@ const {
   detectImageMime,
   parseNonNegativeInt,
   resolveAttachmentLimits,
+  resolveMaxToolTurns,
   resolveSystemPrompt,
   resolveUsageStatsConfig,
   wildcardToRegExp,
@@ -331,6 +332,7 @@ describe("defaultAgentConfig", () => {
     assert.equal(cfg.runtime.profile, "dev");
     assert.equal(cfg.runtime.defaultApprovalMode, "ask");
     assert.equal(cfg.runtime.defaultToolsMode, "auto");
+    assert.equal(cfg.runtime.maxToolTurns, 10);
     assert.equal(cfg.runtime.commandTimeoutMs, 10000);
     assert.equal(cfg.runtime.allowInsecureHttp, false);
     assert.equal(cfg.runtime.usageStats.enabled, false);
@@ -1640,6 +1642,29 @@ describe("resolveAttachmentLimits", () => {
     assert.equal(out.maxFiles, 4);
     assert.equal(out.maxImages, 5);
     assert.equal(out.maxFileBytes, null);
+  });
+});
+
+describe("resolveMaxToolTurns", () => {
+  it("returns default when config is missing", () => {
+    assert.equal(resolveMaxToolTurns(null), 10);
+    assert.equal(resolveMaxToolTurns({}), 10);
+  });
+
+  it("reads valid integer values", () => {
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: 20 } }), 20);
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: "15" } }), 15);
+  });
+
+  it("clamps values to 1..200", () => {
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: 0 } }), 1);
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: 999 } }), 200);
+  });
+
+  it("falls back to default for invalid values", () => {
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: "" } }), 10);
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: "abc" } }), 10);
+    assert.equal(resolveMaxToolTurns({ runtime: { maxToolTurns: 3.5 } }), 10);
   });
 });
 

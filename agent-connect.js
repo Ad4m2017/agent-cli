@@ -12,7 +12,7 @@ const { stdin, stdout } = require("node:process");
  */
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
-const CONNECT_VERSION = "1.5.4";
+const CONNECT_VERSION = "1.5.5";
 
 /**
  * Centralized error codes.
@@ -879,6 +879,7 @@ function defaultAgentConfig() {
       profile: "dev",
       defaultApprovalMode: "ask",
       defaultToolsMode: "auto",
+      maxToolTurns: 10,
       commandTimeoutMs: 10000,
       allowInsecureHttp: false,
       usageStats: {

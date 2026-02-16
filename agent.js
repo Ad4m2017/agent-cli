@@ -17,7 +17,7 @@ const execFileAsync = promisify(execFile);
 const DEFAULT_AGENT_CONFIG_FILE = path.resolve(process.cwd(), "agent.json");
 const DEFAULT_AUTH_CONFIG_FILE = path.resolve(process.cwd(), "agent.auth.json");
 const COPILOT_REFRESH_BUFFER_MS = 60 * 1000;
-const AGENT_VERSION = "1.5.4";
+const AGENT_VERSION = "1.5.5";
 const IMAGE_MIME_BY_EXT = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -655,6 +655,7 @@ function defaultAgentConfig() {
       profile: "dev",
       defaultApprovalMode: "ask",
       defaultToolsMode: "auto",
+      maxToolTurns: 10,
       commandTimeoutMs: 10000,
       allowInsecureHttp: false,
       usageStats: {
@@ -1057,6 +1058,29 @@ function resolveAttachmentLimits(opts, agentConfig) {
     maxFiles: parseNonNegativeInt(opts && opts.maxFiles != null ? opts.maxFiles : cfg.maxFiles, "--max-files"),
     maxImages: parseNonNegativeInt(opts && opts.maxImages != null ? opts.maxImages : cfg.maxImages, "--max-images"),
   };
+}
+
+function resolveMaxToolTurns(agentConfig) {
+  const runtime = agentConfig && agentConfig.runtime && typeof agentConfig.runtime === "object" ? agentConfig.runtime : {};
+  const raw = runtime.maxToolTurns;
+
+  if (raw == null) return 10;
+
+  let value;
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw) || !Number.isInteger(raw)) return 10;
+    value = raw;
+  } else if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed || !/^\d+$/.test(trimmed)) return 10;
+    value = Number(trimmed);
+  } else {
+    return 10;
+  }
+
+  if (value < 1) return 1;
+  if (value > 200) return 200;
+  return value;
 }
 
 function resolveSystemPrompt(opts, agentConfig) {
@@ -3324,7 +3348,7 @@ async function main() {
     output_tokens: 0,
     total_tokens: 0,
   };
-  const maxTurns = 5;
+  const maxTurns = resolveMaxToolTurns(agentConfig);
   const profileDetails = getEffectiveProfileDetails(opts, agentConfig);
 
   for (let turn = 0; turn < maxTurns; turn += 1) {
@@ -3600,6 +3624,7 @@ module.exports = {
   detectImageMime,
   parseNonNegativeInt,
   resolveAttachmentLimits,
+  resolveMaxToolTurns,
   resolveSystemPrompt,
   resolveUsageStatsConfig,
   wildcardToRegExp,

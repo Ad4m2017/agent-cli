@@ -39,7 +39,8 @@ This file controls runtime behavior and security policy. It is created with sens
     "defaultModel": "openai/gpt-4.1-mini",
     "profile": "dev",
     "defaultApprovalMode": "ask",
-    "defaultToolsMode": "auto"
+    "defaultToolsMode": "auto",
+    "maxToolTurns": 10
   },
   "security": {
     "denyCritical": [
@@ -77,6 +78,7 @@ This file controls runtime behavior and security policy. It is created with sens
 - `profile` (`string`: `"safe"`, `"dev"`, `"framework"`) -- Runtime profile. Default: `"dev"`.
 - `defaultApprovalMode` (`string`: `"ask"`, `"auto"`, `"never"`) -- Approval mode applied when `--approval` is not passed. Default: `"ask"`.
 - `defaultToolsMode` (`string`: `"auto"`, `"on"`, `"off"`) -- Tools mode applied when `--tools` is not passed. Default: `"auto"`.
+- `maxToolTurns` (`number`) -- Maximum assistant->tool turns per request. Integer clamped to `1..200`. Default: `10`.
 - `commandTimeoutMs` (`number`) -- Timeout for tool command execution (`run_command`) in milliseconds. Default: `10000`.
 - `allowInsecureHttp` (`boolean`) -- Allows non-local `http://` provider base URLs when true. Default: `false`.
 - `approvalTimeoutMs` (`number`, optional) -- Timeout in milliseconds for the interactive approval prompt. 0 or omitted means no timeout.

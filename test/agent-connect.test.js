@@ -395,6 +395,7 @@ describe("defaultAgentConfig (connect)", () => {
     assert.equal(cfg.runtime.profile, "dev");
     assert.equal(cfg.runtime.defaultApprovalMode, "ask");
     assert.equal(cfg.runtime.defaultToolsMode, "auto");
+    assert.equal(cfg.runtime.maxToolTurns, 10);
     assert.ok(Array.isArray(cfg.security.denyCritical));
     assert.ok(cfg.security.modes.safe);
     assert.ok(cfg.security.modes.dev);
