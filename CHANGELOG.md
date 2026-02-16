@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.3] - 2026-02-15
+
+### Changed
+- Optimized hot-path runtime performance without changing behavior.
+- Cached chat tool definitions so they are no longer rebuilt on every run.
+- Added a policy regex cache for `re:` rules to avoid repeated regex compilation during command checks.
+- Replaced the tool-execution `if/else` chain with a constant executor map and tracked failed tool calls incrementally.
+- Bumped versions to `1.5.3` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.2] - 2026-02-15
 
 ### Changed
