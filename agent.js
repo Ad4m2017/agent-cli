@@ -2167,6 +2167,101 @@ function tokenizeCommand(input) {
   return tokens;
 }
 
+function resolvePowerShellPath() {
+  const systemRoot = process.env.SystemRoot || process.env.WINDIR;
+  if (systemRoot) {
+    const candidate = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return "powershell.exe";
+}
+
+function buildShellCommandAttempts(command) {
+  if (process.platform === "win32") {
+    return [
+      {
+        backend: "powershell",
+        file: resolvePowerShellPath(),
+        args: ["-NoProfile", "-NonInteractive", "-Command", command],
+      },
+      {
+        backend: "cmd",
+        file: "cmd.exe",
+        args: ["/d", "/s", "/c", command],
+      },
+    ];
+  }
+
+  const shPath = fs.existsSync("/bin/sh") ? "/bin/sh" : "sh";
+  return [
+    {
+      backend: "sh",
+      file: shPath,
+      args: ["-lc", command],
+    },
+  ];
+}
+
+function isShellBackendMissingError(err) {
+  if (!err || typeof err !== "object") return false;
+  const code = typeof err.code === "string" ? err.code : "";
+  if (code === "ENOENT" || code === "ENOTFOUND") return true;
+  const msg = err.message ? String(err.message).toLowerCase() : "";
+  return msg.includes("not found") || msg.includes("cannot find") || msg.includes("is not recognized");
+}
+
+async function executeShellCommand(command, timeoutMs) {
+  const attempts = buildShellCommandAttempts(command);
+  let lastErr = null;
+
+  for (let i = 0; i < attempts.length; i += 1) {
+    const attempt = attempts[i];
+    try {
+      const { stdout, stderr } = await execFileAsync(attempt.file, attempt.args, {
+        cwd: process.cwd(),
+        timeout: timeoutMs,
+        maxBuffer: 1024 * 1024,
+      });
+      return {
+        ok: true,
+        executionMode: "shell",
+        backend: attempt.backend,
+        stdout: stdout || "",
+        stderr: stderr || "",
+        code: 0,
+        timedOut: false,
+      };
+    } catch (err) {
+      lastErr = err;
+      const canRetryDifferentBackend = i < attempts.length - 1 && isShellBackendMissingError(err);
+      if (canRetryDifferentBackend) continue;
+
+      const timeoutLike = !!(err && (err.killed || err.signal === "SIGTERM") && err.code == null);
+      return {
+        ok: false,
+        executionMode: "shell",
+        backend: attempt.backend,
+        error: err && err.message ? err.message : String(err),
+        stdout: err && typeof err.stdout === "string" ? err.stdout : "",
+        stderr: err && typeof err.stderr === "string" ? err.stderr : "",
+        code: typeof err.code === "number" ? err.code : null,
+        timedOut: timeoutLike,
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    executionMode: "shell",
+    backend: "unknown",
+    error: lastErr && lastErr.message ? lastErr.message : String(lastErr || "Shell execution failed"),
+    stdout: lastErr && typeof lastErr.stdout === "string" ? lastErr.stdout : "",
+    stderr: lastErr && typeof lastErr.stderr === "string" ? lastErr.stderr : "",
+    code: lastErr && typeof lastErr.code === "number" ? lastErr.code : null,
+    timedOut: false,
+  };
+}
+
 /**
  * Match a policy rule against a command.
  * Rule syntax:
@@ -2628,38 +2723,9 @@ async function runCommandTool(args, options, agentConfig) {
     }
   }
 
-  const parts = tokenizeCommand(cmd);
-  if (parts.length === 0) {
-    return { ok: false, error: "Empty command" };
-  }
-
-  const file = parts[0];
-  const execArgs = parts.slice(1);
   const commandTimeoutMs = resolveCommandTimeoutMs(options, agentConfig);
-
-  try {
-    const { stdout, stderr } = await execFileAsync(file, execArgs, {
-      cwd: process.cwd(),
-      timeout: commandTimeoutMs,
-      maxBuffer: 1024 * 1024,
-    });
-    return {
-      ok: true,
-      cmd,
-      approvalMode,
-      stdout: stdout || "",
-      stderr: stderr || "",
-    };
-  } catch (err) {
-    return {
-      ok: false,
-      cmd,
-      error: err && err.message ? err.message : String(err),
-      stdout: err && typeof err.stdout === "string" ? err.stdout : "",
-      stderr: err && typeof err.stderr === "string" ? err.stderr : "",
-      code: typeof err.code === "number" ? err.code : null,
-    };
-  }
+  const result = await executeShellCommand(cmd, commandTimeoutMs);
+  return Object.assign({ cmd, approvalMode }, result);
 }
 
 const SYNC_TOOL_EXECUTORS = Object.assign(Object.create(null), {
