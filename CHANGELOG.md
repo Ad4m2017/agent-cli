@@ -4,6 +4,17 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.6] - 2026-02-16
+
+### Changed
+- Switched `run_command` to real shell execution for full command compatibility (`pipes`, redirects, chaining, globs) instead of argv tokenization.
+- Added cross-platform shell backend handling:
+  - Unix/macOS: `sh -lc`
+  - Windows: PowerShell primary with `cmd.exe` fallback when a shell backend is unavailable.
+- Preserved existing policy/approval/timeout guards while returning execution metadata (`executionMode`, `backend`, `timedOut`).
+- Expanded CI with a blocking `shell-smoke` OS matrix (Linux/macOS/Windows) and a scheduled/manual `shell-extended-nightly` matrix job.
+- Bumped versions to `1.5.6` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.5] - 2026-02-16
 
 ### Changed
