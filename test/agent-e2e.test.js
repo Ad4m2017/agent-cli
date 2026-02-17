@@ -257,7 +257,9 @@ describe("agent.js e2e tool smoke", () => {
       assert.equal(json.toolCalls[0].tool, "run_command");
       assert.equal(json.toolCalls[0].ok, true);
       assert.equal(typeof json.toolCalls[0].result.stdout, "string");
-      assert.equal(json.toolCalls[0].result.stdout.includes(tmpDir), true);
+      const normalizedStdout = json.toolCalls[0].result.stdout.replace(/\\/g, "/").toLowerCase();
+      const normalizedTmpDir = tmpDir.replace(/\\/g, "/").toLowerCase();
+      assert.equal(normalizedStdout.includes(normalizedTmpDir), true);
     } finally {
       await server.close();
       fs.rmSync(tmpDir, { recursive: true, force: true });
