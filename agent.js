@@ -1613,6 +1613,10 @@ function wildcardToRegExp(pattern) {
   return new RegExp(`^${withWildcards}$`);
 }
 
+function normalizeRelPathForPattern(relPath) {
+  return String(relPath || "").replace(/\\/g, "/");
+}
+
 function isTextFilePath(filePath) {
   const ext = path.extname(String(filePath || "")).toLowerCase();
   const binaryLike = [
@@ -1745,7 +1749,10 @@ function listFilesTool(args) {
   if (!stat.isDirectory()) return { ok: false, code: ERROR_CODES.TOOL_INVALID_ARGS, error: `Path is not a directory: ${rootRaw}` };
 
   const files = listFilesRecursive(root, includeHidden)
-    .map((abs) => ({ abs, rel: path.relative(root, abs) }))
+    .map((abs) => {
+      const rel = path.relative(root, abs);
+      return { abs, rel: normalizeRelPathForPattern(rel) };
+    })
     .filter((f) => rx.test(f.rel))
     .slice(0, maxResults)
     .map((f) => f.rel);
@@ -1790,7 +1797,7 @@ function searchContentTool(args) {
   const files = listFilesRecursive(root, includeHidden);
   for (const abs of files) {
     if (matches.length >= maxResults) break;
-    const rel = path.relative(root, abs);
+    const rel = normalizeRelPathForPattern(path.relative(root, abs));
     if (!includeRx.test(rel)) continue;
     if (!isTextFilePath(abs)) continue;
 
