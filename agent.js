@@ -2114,59 +2114,6 @@ function getProviderEntry(config, providerName) {
   return config.providers[providerName] || null;
 }
 
-/**
- * Minimal command tokenizer for safe execFile usage.
- * Supports quoted args and escaped characters.
- */
-function tokenizeCommand(input) {
-  const tokens = [];
-  let cur = "";
-  let quote = null;
-  let escaped = false;
-
-  for (let i = 0; i < input.length; i += 1) {
-    const ch = input[i];
-
-    if (escaped) {
-      cur += ch;
-      escaped = false;
-      continue;
-    }
-
-    if (ch === "\\") {
-      escaped = true;
-      continue;
-    }
-
-    if (quote) {
-      if (ch === quote) {
-        quote = null;
-      } else {
-        cur += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-
-    if (/\s/.test(ch)) {
-      if (cur.length > 0) {
-        tokens.push(cur);
-        cur = "";
-      }
-      continue;
-    }
-
-    cur += ch;
-  }
-
-  if (cur.length > 0) tokens.push(cur);
-  return tokens;
-}
-
 function resolvePowerShellPath() {
   const systemRoot = process.env.SystemRoot || process.env.WINDIR;
   if (systemRoot) {
@@ -3669,7 +3616,6 @@ module.exports = {
   suggestProviderName,
   resolveModelSelection,
   getProviderEntry,
-  tokenizeCommand,
   matchesPolicyRule,
   evaluateCommandPolicy,
   parseProfileValue,

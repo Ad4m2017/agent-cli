@@ -35,7 +35,6 @@ const {
   suggestProviderName,
   resolveModelSelection,
   getProviderEntry,
-  tokenizeCommand,
   matchesPolicyRule,
   evaluateCommandPolicy,
   parseProfileValue,
@@ -489,40 +488,6 @@ describe("getProviderEntry", () => {
   it("returns null for missing providers key", () => {
     assert.equal(getProviderEntry({}, "openai"), null);
     assert.equal(getProviderEntry({ providers: null }, "openai"), null);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// tokenizeCommand
-// ---------------------------------------------------------------------------
-describe("tokenizeCommand", () => {
-  it("tokenizes simple commands", () => {
-    assert.deepEqual(tokenizeCommand("ls -la"), ["ls", "-la"]);
-    assert.deepEqual(tokenizeCommand("git status"), ["git", "status"]);
-  });
-
-  it("handles double-quoted strings", () => {
-    assert.deepEqual(tokenizeCommand('echo "hello world"'), ["echo", "hello world"]);
-  });
-
-  it("handles single-quoted strings", () => {
-    assert.deepEqual(tokenizeCommand("echo 'hello world'"), ["echo", "hello world"]);
-  });
-
-  it("handles backslash escapes", () => {
-    assert.deepEqual(tokenizeCommand("echo hello\\ world"), ["echo", "hello world"]);
-  });
-
-  it("handles empty input", () => {
-    assert.deepEqual(tokenizeCommand(""), []);
-  });
-
-  it("handles multiple spaces", () => {
-    assert.deepEqual(tokenizeCommand("a   b   c"), ["a", "b", "c"]);
-  });
-
-  it("handles mixed quotes", () => {
-    assert.deepEqual(tokenizeCommand(`echo "it's" 'a "test"'`), ["echo", "it's", 'a "test"']);
   });
 });
 
