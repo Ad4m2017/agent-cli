@@ -7,7 +7,7 @@
     "defaultApprovalMode": "auto",
     "defaultToolsMode": "auto",
     "maxToolTurns": 10,
-    "commandTimeoutMs": 10000,
+    "commandTimeoutMs": 1800000,
     "approvalTimeoutMs": 0,
     "allowInsecureHttp": false,
     "systemPrompt": "",

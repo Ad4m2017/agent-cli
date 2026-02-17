@@ -903,7 +903,7 @@ function resolveCommandTimeoutMs(opts, agentConfig) {
   const rounded = Math.round(raw);
   if (!Number.isFinite(rounded) || rounded <= 0) return 10000;
   if (rounded < 100) return 100;
-  if (rounded > 600000) return 600000;
+  if (rounded > 10800000) return 10800000;
   return rounded;
 }
 

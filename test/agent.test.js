@@ -1164,7 +1164,7 @@ describe("resolveCommandTimeoutMs", () => {
 
   it("applies lower and upper bounds", () => {
     assert.equal(resolveCommandTimeoutMs({ commandTimeoutMs: 1 }, {}), 100);
-    assert.equal(resolveCommandTimeoutMs({ commandTimeoutMs: 9999999 }, {}), 600000);
+    assert.equal(resolveCommandTimeoutMs({ commandTimeoutMs: 99999999 }, {}), 10800000);
   });
 });
 
