@@ -78,7 +78,7 @@ node agent-connect.js
 
 The interactive wizard lets you pick a provider, enter your API key, and set defaults. In TTY terminals, use arrow keys + Enter to navigate menus.
 
-Wizard highlights in `v1.5.6`:
+Wizard highlights in `v1.5.7`:
 - Provider status labels (`installed`, `installed, default`, `not configured`)
 - Quick action `Set default provider/model only` (no full reconfiguration needed)
 - Optional model refresh from live `/models` with fallback to `models.dev`
@@ -344,7 +344,7 @@ A full German README is available at [README.de.md](README.de.md).
 
 ## Version
 
-Current version: `1.5.6` -- see [CHANGELOG.md](CHANGELOG.md).
+Current version: `1.5.7` -- see [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

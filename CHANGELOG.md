@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.7] - 2026-02-17
+
+### Changed
+- Raised the `run_command` timeout ceiling to `10800000` ms (3 hours) while keeping input clamping and fallback behavior in place.
+- Set runtime default `commandTimeoutMs` to `1800000` ms (30 minutes) in both `agent.json` and `agent.example.json`.
+- Updated timeout bounds tests and EN/DE config reference docs (including generated HTML) to reflect the effective range.
+- Bumped versions to `1.5.7` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.6] - 2026-02-16
 
 ### Changed
