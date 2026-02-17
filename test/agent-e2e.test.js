@@ -249,10 +249,10 @@ describe("agent.js e2e tool smoke", () => {
   it("runs run_command flow", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-e2e-cmd-"));
 
-    const server = await startMockProvider("run_command", { cmd: "pwd" }, "done");
+    const server = await startMockProvider("run_command", { cmd: 'node -p "process.cwd()"' }, "done");
     try {
       writeConfigs(tmpDir, server.port);
-      const json = await runAgentOnce(tmpDir, "Run pwd");
+      const json = await runAgentOnce(tmpDir, "Run cwd check");
       assert.equal(json.ok, true);
       assert.equal(json.toolCalls[0].tool, "run_command");
       assert.equal(json.toolCalls[0].ok, true);
