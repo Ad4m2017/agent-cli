@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.8] - 2026-02-18
+
+### Changed
+- Normalized relative paths used by `list_files` and `search_content` include-pattern matching to forward slashes for consistent cross-platform behavior (Windows fix).
+- Stabilized Windows shell-smoke e2e assertions for `run_command` by switching to shell-agnostic validation checks.
+- Prevented `ok: true` responses with empty `message` when tool turns are exhausted without a final assistant reply.
+- Added structured failure signaling for max-turn termination with `code: MAX_TOOL_TURNS_NO_FINAL`, `status`, and `termination` fields while retaining `toolCalls`/`health` diagnostics.
+- Updated JSON schema, tests, and EN/DE JSON contract + API examples (including generated HTML docs) for new status/termination semantics.
+- Bumped versions to `1.5.8` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.7] - 2026-02-17
 
 ### Changed
