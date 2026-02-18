@@ -48,6 +48,7 @@ const ERROR_CODES = {
   INTERACTIVE_APPROVAL_JSON: "INTERACTIVE_APPROVAL_JSON",
   INTERACTIVE_APPROVAL_TTY: "INTERACTIVE_APPROVAL_TTY",
   TOOLS_NOT_SUPPORTED: "TOOLS_NOT_SUPPORTED",
+  MAX_TOOL_TURNS_NO_FINAL: "MAX_TOOL_TURNS_NO_FINAL",
   INVALID_OPTION: "INVALID_OPTION",
   RUNTIME_ERROR: "RUNTIME_ERROR",
   FETCH_TIMEOUT: "FETCH_TIMEOUT",
@@ -487,6 +488,7 @@ function buildJsonOutputSchema() {
       provider: { type: "string" },
       model: { type: "string" },
       profile: { type: "string", enum: ["safe", "dev", "framework"] },
+      status: { type: "string", enum: ["completed", "failed"] },
       mode: { type: "string" },
       approvalMode: { type: "string" },
       toolsMode: { type: "string" },
@@ -501,6 +503,15 @@ function buildJsonOutputSchema() {
           toolCallFailureRate: { type: "number" },
         },
         required: ["retriesUsed", "toolCallsTotal", "toolCallsFailed", "toolCallFailureRate"],
+      },
+      termination: {
+        type: "object",
+        properties: {
+          reason: { type: "string" },
+          maxToolTurns: { type: "number" },
+          turnsUsed: { type: "number" },
+        },
+        required: ["reason", "maxToolTurns", "turnsUsed"],
       },
       attachments: {
         type: "object",
@@ -3520,11 +3531,17 @@ async function main() {
     );
   }
 
+  const hasFinalText = typeof finalText === "string" && finalText.trim().length > 0;
+  const maxTurnsNoFinal = !hasFinalText && toolCalls.length > 0 && usageAggregate.turns >= maxTurns;
+  const requestFailed = !hasFinalText;
+  const terminationReason = maxTurnsNoFinal ? "max_tool_turns_no_final" : requestFailed ? "provider_error" : "completed";
+
   const payload = {
-    ok: true,
+    ok: !requestFailed,
     provider: runtime.provider,
     model: `${runtime.provider}/${runtime.model}`,
     profile: profileDetails.profile,
+    status: requestFailed ? "failed" : "completed",
     mode: getEffectiveMode(opts, agentConfig),
     approvalMode,
     toolsMode,
@@ -3536,6 +3553,11 @@ async function main() {
       toolCallsFailed: failedToolCalls,
       toolCallFailureRate: toolCalls.length ? failedToolCalls / toolCalls.length : 0,
     },
+    termination: {
+      reason: terminationReason,
+      maxToolTurns: maxTurns,
+      turnsUsed: usageAggregate.turns,
+    },
     attachments: {
       files: attachments.files.map((f) => ({ path: f.path, size: f.size, type: "text" })),
       images: attachments.images.map((i) => ({ path: i.path, size: i.size, type: i.mime })),
@@ -3545,6 +3567,16 @@ async function main() {
     toolCalls,
     timingMs: Date.now() - start,
   };
+
+  if (requestFailed) {
+    if (maxTurnsNoFinal) {
+      payload.code = ERROR_CODES.MAX_TOOL_TURNS_NO_FINAL;
+      payload.error = `Maximum tool-call turns (${maxTurns}) reached without a final answer.`;
+    } else {
+      payload.code = ERROR_CODES.RUNTIME_ERROR;
+      payload.error = "Model returned an empty final message.";
+    }
+  }
 
   appendUsageStatsEvent(usageStatsConfig, {
     ts: new Date().toISOString(),
@@ -3561,9 +3593,15 @@ async function main() {
   if (opts.json) {
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
   } else {
-    if (!streamedFinalOutput) {
+    if (requestFailed) {
+      process.stderr.write(`Error [${payload.code}]: ${payload.error}\n`);
+    } else if (!streamedFinalOutput) {
       process.stdout.write(`${payload.message || "(keine Antwort)"}\n`);
     }
+  }
+
+  if (requestFailed) {
+    process.exit(1);
   }
 }
 

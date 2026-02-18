@@ -37,12 +37,14 @@
 <h2 id="top-level-antworten">Top-Level Antworten</h2>
 <h3 id="erfolgs-form">Erfolgs-Form</h3>
 <p>Garantierte Keys bei Erfolg:</p>
-<ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>health</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
+<ul><li><code>ok</code></li><li><code>provider</code></li><li><code>model</code></li><li><code>profile</code></li><li><code>status</code></li><li><code>mode</code></li><li><code>approvalMode</code></li><li><code>toolsMode</code></li><li><code>toolsEnabled</code></li><li><code>toolsFallbackUsed</code></li><li><code>health</code></li><li><code>termination</code></li><li><code>attachments</code></li><li><code>usage</code></li><li><code>message</code></li><li><code>toolCalls</code></li><li><code>timingMs</code></li></ul>
 <p>Optionale Keys bei Erfolg:</p>
 <ul><li>Keine</li></ul>
 <h3 id="fehler-form">Fehler-Form</h3>
 <p>Garantierte Keys bei Fehlern:</p>
 <ul><li><code>ok</code></li><li><code>error</code></li><li><code>code</code></li></ul>
+<p>Zusaetzliche stabile Felder, die bei Runtime-Fehlern haeufig vorhanden sind:</p>
+<ul><li><code>status</code> (<code>failed</code>)</li><li><code>termination</code></li><li><code>toolCalls</code></li><li><code>health</code></li></ul>
 <h2 id="tool-call-records">Tool-Call-Records</h2>
 <p>Jeder Eintrag in <code>toolCalls</code> wird normalisiert als:</p>
 <ul><li><code>tool</code></li><li><code>input</code></li><li><code>ok</code></li><li><code>result</code></li><li><code>error</code></li><li><code>meta</code></li></ul>
@@ -50,6 +52,10 @@
 <h2 id="health-zusammenfassung">Health-Zusammenfassung</h2>
 <p><code>health</code> ist bei erfolgreichen Antworten immer vorhanden und enthaelt:</p>
 <ul><li><code>retriesUsed</code> (<code>number</code>) -- Anzahl verwendeter Fetch-Retries fuer Chat-Completion-Requests.</li><li><code>toolCallsTotal</code> (<code>number</code>) -- Gesamtzahl ausgefuehrter Tool-Calls.</li><li><code>toolCallsFailed</code> (<code>number</code>) -- Anzahl Tool-Calls mit <code>ok: false</code>.</li><li><code>toolCallFailureRate</code> (<code>number</code>) -- <code>toolCallsFailed / toolCallsTotal</code> (0 ohne Tool-Calls).</li></ul>
+<h2 id="status-und-termination">Status und Termination</h2>
+<ul><li><code>status</code> (<code>string</code>) -- <code>completed</code> oder <code>failed</code>.</li><li><code>termination</code> (<code>object</code>) -- Abschlussdetails:</li><li><code>reason</code> (<code>string</code>) -- z.B. <code>completed</code>, <code>max_tool_turns_no_final</code>, <code>provider_error</code></li><li><code>maxToolTurns</code> (<code>number</code>)</li><li><code>turnsUsed</code> (<code>number</code>)</li></ul>
+<p>Wenn der Agent das Tool-Runden-Limit ohne finale Assistant-Textantwort erreicht, ist der Output:</p>
+<ul><li><code>ok: false</code></li><li><code>code: MAX_TOOL_TURNS_NO_FINAL</code></li><li><code>status: failed</code></li><li><code>termination.reason: max_tool_turns_no_final</code></li></ul>
 <h2 id="tool-fehlercodes">Tool-Fehlercodes</h2>
 <ul><li><code>TOOL_INVALID_ARGS</code></li><li><code>TOOL_NOT_FOUND</code></li><li><code>TOOL_INVALID_PATTERN</code></li><li><code>TOOL_UNSUPPORTED_FILE_TYPE</code></li><li><code>TOOL_CONFLICT</code></li><li><code>TOOL_UNKNOWN</code></li><li><code>TOOL_EXECUTION_ERROR</code></li></ul>
 <h2 id="maschinenlesbares-schema">Maschinenlesbares Schema</h2>
@@ -64,6 +70,7 @@
 <a class="sub-item" href="#fehler-form">Fehler-Form</a>
 <a href="#tool-call-records">Tool-Call-Records</a>
 <a href="#health-zusammenfassung">Health-Zusammenfassung</a>
+<a href="#status-und-termination">Status und Termination</a>
 <a href="#tool-fehlercodes">Tool-Fehlercodes</a>
 <a href="#maschinenlesbares-schema">Maschinenlesbares Schema</a></nav>
       </aside>

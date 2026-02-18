@@ -105,6 +105,7 @@ describe("ERROR_CODES", () => {
       "INTERACTIVE_APPROVAL_JSON",
       "INTERACTIVE_APPROVAL_TTY",
       "TOOLS_NOT_SUPPORTED",
+      "MAX_TOOL_TURNS_NO_FINAL",
       "INVALID_OPTION",
       "RUNTIME_ERROR",
       "FETCH_TIMEOUT",
@@ -316,6 +317,13 @@ describe("buildJsonOutputSchema", () => {
     const health = s.properties.health;
     assert.equal(health.type, "object");
     assert.deepEqual(health.required, ["retriesUsed", "toolCallsTotal", "toolCallsFailed", "toolCallFailureRate"]);
+  });
+
+  it("includes status and termination schema", () => {
+    const s = buildJsonOutputSchema();
+    assert.deepEqual(s.properties.status.enum, ["completed", "failed"]);
+    assert.equal(s.properties.termination.type, "object");
+    assert.deepEqual(s.properties.termination.required, ["reason", "maxToolTurns", "turnsUsed"]);
   });
 });
 

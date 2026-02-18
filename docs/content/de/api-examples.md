@@ -197,6 +197,7 @@ else:
   "provider": "copilot",
   "model": "copilot/gpt-4o",
   "profile": "dev",
+  "status": "completed",
   "mode": "dev",
   "approvalMode": "auto",
   "toolsMode": "auto",
@@ -207,6 +208,11 @@ else:
     "toolCallsTotal": 1,
     "toolCallsFailed": 0,
     "toolCallFailureRate": 0
+  },
+  "termination": {
+    "reason": "completed",
+    "maxToolTurns": 10,
+    "turnsUsed": 2
   },
   "attachments": {
     "files": [],
@@ -245,6 +251,36 @@ else:
 }
 ```
 
+### Max Tool Turns ohne finale Antwort
+
+```json
+{
+  "ok": false,
+  "provider": "copilot",
+  "model": "copilot/gpt-5-mini",
+  "profile": "framework",
+  "status": "failed",
+  "mode": "framework",
+  "approvalMode": "auto",
+  "toolsMode": "auto",
+  "health": {
+    "retriesUsed": 0,
+    "toolCallsTotal": 10,
+    "toolCallsFailed": 2,
+    "toolCallFailureRate": 0.2
+  },
+  "termination": {
+    "reason": "max_tool_turns_no_final",
+    "maxToolTurns": 10,
+    "turnsUsed": 10
+  },
+  "message": "",
+  "toolCalls": [],
+  "error": "Maximum tool-call turns (10) reached without a final answer.",
+  "code": "MAX_TOOL_TURNS_NO_FINAL"
+}
+```
+
 ### Blockierter Befehl im Tool-Call
 
 ```json
@@ -269,12 +305,14 @@ Garantiert in erfolgreichen `--json`-Antworten:
 - `provider`
 - `model`
 - `profile`
+- `status`
 - `mode`
 - `approvalMode`
 - `toolsMode`
 - `toolsEnabled`
 - `toolsFallbackUsed`
 - `health`
+- `termination`
 - `attachments`
 - `usage`
 - `message`
@@ -310,12 +348,14 @@ Hauefige Tool-Fehlercodes in normalisierten Tool-Call-Records:
 - `provider` (`string`) -- Verwendeter Provider
 - `model` (`string`) -- Vollstaendige Modell-Kennung (`provider/model`)
 - `profile` (`string`) -- Effektives Runtime-Profil (`safe|dev|framework`)
+- `status` (`string`) -- Endstatus (`completed|failed`)
 - `mode` (`string`) -- Effektiver Policy-Key (gleicher Wert wie Profil: `safe|dev|framework`)
 - `approvalMode` (`string`) -- Aktiver Freigabemodus
 - `toolsMode` (`string`) -- Konfigurierter Tools-Modus
 - `toolsEnabled` (`boolean`) -- Ob Tools tatsaechlich an das Modell gesendet wurden
 - `toolsFallbackUsed` (`boolean`) -- Ob Auto-Modus auf ohne-Tools zurueckgefallen ist
 - `health` (`object`) -- Runtime-Health-Zusammenfassung (`retriesUsed`, `toolCallsTotal`, `toolCallsFailed`, `toolCallFailureRate`)
+- `termination` (`object`) -- Abschlussdetails (`reason`, `maxToolTurns`, `turnsUsed`)
 - `attachments` (`object`) -- Angehaengte Dateien und Bilder
 - `usage` (`object`) -- Aggregierte Usage fuer diesen Lauf (`turns`, `input_tokens`, `output_tokens`, `total_tokens`, ...)
 - `message` (`string`) -- Finale Textantwort der KI

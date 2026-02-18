@@ -12,12 +12,14 @@ Guaranteed keys on success:
 - `provider`
 - `model`
 - `profile`
+- `status`
 - `mode`
 - `approvalMode`
 - `toolsMode`
 - `toolsEnabled`
 - `toolsFallbackUsed`
 - `health`
+- `termination`
 - `attachments`
 - `usage`
 - `message`
@@ -35,6 +37,13 @@ Guaranteed keys on error:
 - `ok`
 - `error`
 - `code`
+
+Additional stable fields commonly present on runtime failures:
+
+- `status` (`failed`)
+- `termination`
+- `toolCalls`
+- `health`
 
 ## Tool Call Records
 
@@ -57,6 +66,21 @@ When `ok` is `false`, `error.code` is always set (fallback: `TOOL_EXECUTION_ERRO
 - `toolCallsTotal` (`number`) -- Total number of tool calls executed.
 - `toolCallsFailed` (`number`) -- Number of tool calls with `ok: false`.
 - `toolCallFailureRate` (`number`) -- `toolCallsFailed / toolCallsTotal` (0 when no tool calls).
+
+## Status and Termination
+
+- `status` (`string`) -- `completed` or `failed`.
+- `termination` (`object`) -- Completion details:
+  - `reason` (`string`) -- e.g. `completed`, `max_tool_turns_no_final`, `provider_error`
+  - `maxToolTurns` (`number`)
+  - `turnsUsed` (`number`)
+
+When the agent reaches max tool turns without a final assistant text, output is:
+
+- `ok: false`
+- `code: MAX_TOOL_TURNS_NO_FINAL`
+- `status: failed`
+- `termination.reason: max_tool_turns_no_final`
 
 ## Tool Error Codes
 
