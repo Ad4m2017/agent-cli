@@ -6,7 +6,7 @@
     "profile": "dev",
     "defaultApprovalMode": "auto",
     "defaultToolsMode": "auto",
-    "maxToolTurns": 10,
+    "maxToolTurns": 200,
     "commandTimeoutMs": 1800000,
     "approvalTimeoutMs": 0,
     "allowInsecureHttp": false,

@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 The format is based on Keep a Changelog and this project follows Semantic Versioning.
 
+## [1.5.9] - 2026-02-18
+
+### Changed
+- Increased `runtime.maxToolTurns` default in `agent.json` from `10` to `200`.
+- Bumped versions to `1.5.9` in `agent.js`, `agent-connect.js`, and `package.json`.
+
 ## [1.5.8] - 2026-02-18
 
 ### Changed
